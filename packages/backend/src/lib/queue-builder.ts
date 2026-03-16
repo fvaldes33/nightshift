@@ -1,6 +1,6 @@
 import type { Job, Queue, SendOptions, WorkOptions } from "pg-boss";
 import type { z } from "zod";
-import { getBoss } from "../config/queue";
+import { boss } from "../config/queue";
 
 export class QueueBuilder<TInput extends Record<string, unknown>> {
   public name: string;
@@ -23,7 +23,6 @@ export class QueueBuilder<TInput extends Record<string, unknown>> {
 
   /** Create the queue and register the worker. Must be called after boss.start(). */
   async init() {
-    const boss = getBoss();
     const queue = await boss.getQueue(this.name);
     if (!queue) {
       await boss.createQueue(this.name, this.queueOptions);
@@ -44,7 +43,6 @@ export class QueueBuilder<TInput extends Record<string, unknown>> {
   }
 
   async send(data: TInput, options: SendOptions = {}) {
-    const boss = getBoss();
     const parsed = this.schema.parse(data);
     return boss.send(this.name, parsed, options);
   }
