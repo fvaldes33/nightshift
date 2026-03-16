@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+.next
+.react-router
+.turbo
+bun.lock
+coverage
