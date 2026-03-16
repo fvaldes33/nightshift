@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq } from "@openralph/db/drizzle";
 import { z } from "zod";
 import { db } from "@openralph/db/config/database";
 import { insertLoopSchema, loops, updateLoopSchema } from "@openralph/db/models/index";

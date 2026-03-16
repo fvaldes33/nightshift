@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "@openralph/db/drizzle";
 import { z } from "zod";
 import { db } from "@openralph/db/config/database";
 import {
