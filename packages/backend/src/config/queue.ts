@@ -1,16 +1,13 @@
-import { neonConfig, Pool } from "@neondatabase/serverless";
 import { PgBoss } from "pg-boss";
-import ws from "ws";
-
-neonConfig.webSocketConstructor = ws;
+import postgres from "postgres";
 
 if (!process.env.QUEUE_DATABASE_URL) throw new Error("QUEUE_DATABASE_URL is required");
 
-// Dedicated pool for pg-boss using the non-pooled Neon endpoint.
-// max:1 ensures transaction state persists across executeSql calls (BEGIN/COMMIT).
-const pool = new Pool({
-  connectionString: process.env.QUEUE_DATABASE_URL,
+// Dedicated single connection for pg-boss — max:1 ensures transaction state
+// persists across executeSql calls (BEGIN/COMMIT on same connection).
+const sql = postgres(process.env.QUEUE_DATABASE_URL, {
   max: 1,
+  prepare: false,
 });
 
 let bossInstance: PgBoss | null = null;
@@ -21,8 +18,8 @@ export function getBoss() {
   bossInstance = new PgBoss({
     db: {
       async executeSql(text: string, values?: unknown[]) {
-        const result = await pool.query(text, values as unknown[]);
-        return { rows: result.rows as unknown[] };
+        const rows = await sql.unsafe(text, values as any[]);
+        return { rows: Array.from(rows) };
       },
     },
   });
