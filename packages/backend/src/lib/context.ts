@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { UIMessageStreamWriter } from "ai";
 import type { auth } from "./auth";
 
 export type User = typeof auth.$Infer.Session.user;
@@ -37,3 +38,20 @@ interface UserActor {
 export type Actor = PublicActor | UserActor;
 
 export const ActorContext = createContext<Actor>();
+
+// ---------------------------------------------------------------------------
+// AgentContext — carries per-request state for AI SDK tool execution
+// ---------------------------------------------------------------------------
+
+export interface AgentState {
+  githubToken: string;
+  writer: UIMessageStreamWriter;
+  sessionId: string;
+  repoId: string | null;
+  repoOwner: string | null;
+  repoName: string | null;
+  branch: string | null;
+  worktreePath: string | null;
+}
+
+export const AgentContext = createContext<AgentState>();

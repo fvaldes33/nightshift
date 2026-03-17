@@ -13,12 +13,15 @@
     "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
+    "@mantine/hooks": "^8.3.17",
+    "@tanstack/react-table": "^8.21.3",
     "drizzle-kit": "^0.31.9",
     "prettier": "^3.7.4",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "turbo": "^2.8.17",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "web": "workspace:*"
   },
   "engines": {
     "node": ">=22"

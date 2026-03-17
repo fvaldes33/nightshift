@@ -31,7 +31,14 @@ export class QueueBuilder<TInput extends Record<string, unknown>> {
     if (this.handler) {
       const handler = this.handler;
       await boss.work<TInput>(this.name, this.workOptions, async (jobs: Job<TInput>[]) => {
-        const results = await Promise.allSettled(jobs.map((job) => handler(job)));
+        const results = await Promise.allSettled(
+          jobs.map(async (job) => {
+            const start = Date.now();
+            console.log(`[${this.name}] Job ${job.id} started`, JSON.stringify(job.data));
+            await handler(job);
+            console.log(`[${this.name}] Job ${job.id} completed in ${Date.now() - start}ms`);
+          }),
+        );
         for (let i = 0; i < results.length; i++) {
           const result = results[i];
           if (result?.status === "rejected") {
@@ -44,7 +51,9 @@ export class QueueBuilder<TInput extends Record<string, unknown>> {
 
   async send(data: TInput, options: SendOptions = {}) {
     const parsed = this.schema.parse(data);
-    return boss.send(this.name, parsed, options);
+    const jobId = await boss.send(this.name, parsed, options);
+    console.log(`[${this.name}] Job ${jobId} queued`, JSON.stringify(parsed));
+    return jobId;
   }
 
   /** Store the worker handler. Actual registration happens in init() after boss.start(). */

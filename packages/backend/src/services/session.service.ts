@@ -1,18 +1,23 @@
-import { eq } from "@openralph/db/drizzle";
-import { z } from "zod";
 import { db } from "@openralph/db/config/database";
+import { eq } from "@openralph/db/drizzle";
 import { insertSessionSchema, sessions, updateSessionSchema } from "@openralph/db/models/index";
+import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
+import { cleanupWorktree } from "./workspace.service";
 
-export const listSessions = fn(z.object({}), async () => {
-  return db.query.sessions.findMany({
-    orderBy: (s, { desc }) => [desc(s.updatedAt)],
-    with: { repo: true },
-  });
-});
+export const listSessions = fn(
+  z.object({ repoId: z.uuid().optional() }),
+  async ({ repoId }) => {
+    return db.query.sessions.findMany({
+      where: repoId ? eq(sessions.repoId, repoId) : undefined,
+      orderBy: (s, { desc }) => [desc(s.updatedAt)],
+      with: { repo: true },
+    });
+  },
+);
 
-export const getSession = fn(z.object({ id: z.string().uuid() }), async ({ id }) => {
+export const getSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const session = await db.query.sessions.findFirst({
     where: eq(sessions.id, id),
     with: { repo: true, messages: { orderBy: (m, { asc }) => [asc(m.createdAt)] } },
@@ -22,7 +27,7 @@ export const getSession = fn(z.object({ id: z.string().uuid() }), async ({ id })
 });
 
 export const createSession = fn(
-  insertSessionSchema.pick({ repoId: true, title: true, mode: true }),
+  insertSessionSchema.pick({ repoId: true, title: true, mode: true, branch: true }),
   async (input) => {
     const [session] = await db.insert(sessions).values(input).returning();
     if (!session) throw new AppError("Failed to create session", "INTERNAL_ERROR");
@@ -33,18 +38,28 @@ export const createSession = fn(
 export const updateSession = fn(
   updateSessionSchema.required({ id: true }),
   async ({ id, ...fields }) => {
-    const [session] = await db
-      .update(sessions)
-      .set(fields)
-      .where(eq(sessions.id, id))
-      .returning();
+    const [session] = await db.update(sessions).set(fields).where(eq(sessions.id, id)).returning();
     if (!session) throw new AppError("Session not found", "NOT_FOUND");
     return session;
   },
 );
 
-export const deleteSession = fn(z.object({ id: z.string().uuid() }), async ({ id }) => {
-  const [session] = await db.delete(sessions).where(eq(sessions.id, id)).returning();
+export const deleteSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.id, id),
+    with: { repo: true },
+  });
   if (!session) throw new AppError("Session not found", "NOT_FOUND");
-  return session;
+
+  if (session.worktreePath && session.repo) {
+    cleanupWorktree({
+      owner: session.repo.owner,
+      name: session.repo.name,
+      worktreePath: session.worktreePath,
+    });
+  }
+
+  const [deleted] = await db.delete(sessions).where(eq(sessions.id, id)).returning();
+  if (!deleted) throw new AppError("Failed to delete session", "INTERNAL_ERROR");
+  return deleted;
 });

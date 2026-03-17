@@ -1,6 +1,8 @@
 import { protectedProcedure, router } from "../lib/trpc";
 import {
   addTaskComment,
+  bulkDeleteTasks,
+  bulkUpdateTasks,
   createTask,
   deleteTask,
   getTask,
@@ -17,4 +19,6 @@ export const taskRouter = router({
     .input(addTaskComment.schema)
     .mutation(({ input }) => addTaskComment(input)),
   delete: protectedProcedure.input(deleteTask.schema).mutation(({ input }) => deleteTask(input)),
+  bulkUpdate: protectedProcedure.input(bulkUpdateTasks.schema).mutation(({ input }) => bulkUpdateTasks(input)),
+  bulkDelete: protectedProcedure.input(bulkDeleteTasks.schema).mutation(({ input }) => bulkDeleteTasks(input)),
 });
