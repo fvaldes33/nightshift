@@ -1,13 +1,11 @@
-import { createCaller } from "@openralph/backend/lib/caller";
 import type { NightshiftMessage } from "@openralph/backend/tools/index";
 import type { Message } from "@openralph/db/models/message.model";
 import type { WorkspaceStatus } from "@openralph/db/models/session.model";
 import { Badge } from "@openralph/ui/components/badge";
 import { CheckCircleIcon, Loader2Icon, XCircleIcon } from "lucide-react";
-import { useLoaderData } from "react-router";
+import { useParams } from "react-router";
 import { ChatView } from "~/components/chat/chat-view";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/session";
 
 function toUIMessages(dbMessages: Message[]): NightshiftMessage[] {
   return dbMessages
@@ -20,15 +18,8 @@ function toUIMessages(dbMessages: Message[]): NightshiftMessage[] {
     }));
 }
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const session = await caller.session.get({ id: params.sessionId });
-  const initialMessages = toUIMessages(session.messages);
-  return { session, initialMessages };
-}
-
-export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData?.session.title ?? "Session"} — nightshift` }];
+export function meta() {
+  return [{ title: "Session — nightshift" }];
 }
 
 function WorkspaceStatusIndicator({
@@ -68,21 +59,13 @@ function WorkspaceStatusIndicator({
 }
 
 export default function Session() {
-  const { session: initialSession, initialMessages } = useLoaderData<typeof loader>();
+  const params = useParams();
 
-  // Poll for workspace status while not ready
-  const { data } = trpc.session.get.useQuery(
-    { id: initialSession.id },
-    {
-      initialData: initialSession,
-      refetchInterval: (query) => {
-        const status = query.state.data?.workspaceStatus;
-        return status === "pending" || status === "cloning" ? 1500 : false;
-      },
-    },
-  );
+  const { data: session, isLoading } = trpc.session.get.useQuery({ id: params.sessionId! });
 
-  const session = data ?? initialSession;
+  if (isLoading || !session) return null;
+
+  const initialMessages = toUIMessages(session.messages);
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">

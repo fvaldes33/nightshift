@@ -1,4 +1,3 @@
-import { createCaller } from "@openralph/backend/lib/caller";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,41 +22,36 @@ import {
   TrashIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useLoaderData, useNavigate } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { TaskTable } from "~/components/task-table";
+import { useDocs, useLoops, useRepos, useSessions, useTasks } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/repo";
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const [repo, sessions, tasks, loops, docs] = await Promise.all([
-    caller.repo.get({ id: params.repoId }),
-    caller.session.list({ repoId: params.repoId }),
-    caller.task.list({ repoId: params.repoId }),
-    caller.loop.list({ repoId: params.repoId }),
-    caller.doc.list({ repoId: params.repoId }),
-  ]);
-  return { repo, sessions, tasks, loops, docs };
-}
-
-export function meta({ loaderData }: Route.MetaArgs) {
-  const repo = loaderData?.repo;
-  const title = repo ? `${repo.owner}/${repo.name}` : "Repo";
-  return [{ title: `${title} — ralph` }];
+export function meta() {
+  return [{ title: "Repo — nightshift" }];
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function RepoDetail() {
-  const { repo, sessions, tasks, loops, docs } = useLoaderData<typeof loader>();
+  const params = useParams();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const deleteRepo = trpc.repo.delete.useMutation({
-    onSuccess: () => navigate("/repos"),
-  });
+  const { data: repo, isLoading } = trpc.repo.get.useQuery({ id: params.repoId! });
+
+  const { data: sessions } = useSessions({ repoId: params.repoId });
+  const { data: tasks } = useTasks({ repoId: params.repoId });
+  const { data: loops } = useLoops({ repoId: params.repoId });
+  const { data: docs } = useDocs({ repoId: params.repoId });
+  const { collection: repoCollection } = useRepos();
+
+  if (isLoading || !repo) return null;
+
+  function handleDeleteRepo() {
+    repoCollection.delete(repo!.id);
+    navigate("/repos");
+  }
 
   const activeWorktrees = sessions.filter(
     (s) => s.workspaceStatus === "ready" && s.worktreePath,
@@ -216,8 +210,7 @@ export default function RepoDetail() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={deleteRepo.isPending}
-              onClick={() => deleteRepo.mutate({ id: repo.id })}
+              onClick={handleDeleteRepo}
             >
               Delete
             </AlertDialogAction>

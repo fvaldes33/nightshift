@@ -1,0 +1,10 @@
+ALTER PUBLICATION supabase_realtime ADD TABLE "user";
+ALTER PUBLICATION supabase_realtime ADD TABLE session;
+ALTER PUBLICATION supabase_realtime ADD TABLE account;
+ALTER PUBLICATION supabase_realtime ADD TABLE verification;
+ALTER PUBLICATION supabase_realtime ADD TABLE repos;
+ALTER PUBLICATION supabase_realtime ADD TABLE sessions;
+ALTER PUBLICATION supabase_realtime ADD TABLE tasks;
+ALTER PUBLICATION supabase_realtime ADD TABLE loops;
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE docs;

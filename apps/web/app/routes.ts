@@ -2,9 +2,6 @@ import { type RouteConfig, index, layout, route } from "@react-router/dev/routes
 
 export default [
   route("login", "routes/login.tsx"),
-  route("api/auth/*", "routes/api.auth.$.ts"),
-  route("api/chat", "routes/api.chat.ts"),
-  route("api/trpc/*", "routes/api.trpc.$.ts"),
 
   layout("routes/app-layout.tsx", [
     index("routes/dashboard.tsx"),

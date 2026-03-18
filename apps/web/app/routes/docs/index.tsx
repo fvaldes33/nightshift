@@ -1,4 +1,3 @@
-import { createCaller } from "@openralph/backend/lib/caller";
 import type { DocListItem } from "@openralph/backend/types/doc.types";
 import {
   AlertDialog,
@@ -21,17 +20,9 @@ import {
 } from "@openralph/ui/components/select";
 import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useLoaderData, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
+import { useDocs, useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/index";
-
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const [docs, repos] = await Promise.all([caller.doc.list({}), caller.repo.list({})]);
-  return { docs, repos };
-}
 
 export function meta() {
   return [{ title: "Docs — nightshift" }];
@@ -40,13 +31,12 @@ export function meta() {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function DocsIndex() {
-  const { docs: initialDocs, repos } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
-  const { data } = trpc.doc.list.useQuery({}, { initialData: initialDocs });
-  const allDocs = data ?? initialDocs;
+  const { data: allDocs, collection: docCollection } = useDocs();
+  const { data: repos } = useRepos();
 
   const docs =
     repoFilter === "all"
@@ -57,21 +47,17 @@ export default function DocsIndex() {
 
   const repoMap = new Map(repos.map((r) => [r.id, r]));
 
-  const utils = trpc.useUtils();
-
+  // Keep as tRPC — needs server-generated ID for navigation
   const createDoc = trpc.doc.create.useMutation({
     onSuccess: (doc) => {
-      utils.doc.list.invalidate();
       navigate(`/docs/${doc.id}`);
     },
   });
 
-  const deleteDoc = trpc.doc.delete.useMutation({
-    onSuccess: () => {
-      utils.doc.list.invalidate();
-      setDeleteId(null);
-    },
-  });
+  function handleDeleteDoc(id: string) {
+    docCollection.delete(id);
+    setDeleteId(null);
+  }
 
   function handleCreate() {
     createDoc.mutate({
@@ -193,10 +179,9 @@ export default function DocsIndex() {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => deleteId && deleteDoc.mutate({ id: deleteId })}
-                disabled={deleteDoc.isPending}
+                onClick={() => deleteId && handleDeleteDoc(deleteId)}
               >
-                {deleteDoc.isPending ? "Deleting…" : "Delete"}
+                Delete
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

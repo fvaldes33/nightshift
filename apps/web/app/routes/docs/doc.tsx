@@ -1,5 +1,3 @@
-import { createCaller } from "@openralph/backend/lib/caller";
-import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import { Input } from "@openralph/ui/components/input";
 import {
@@ -11,25 +9,13 @@ import {
 } from "@openralph/ui/components/select";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker, useLoaderData, useNavigate } from "react-router";
+import { useBlocker, useNavigate, useParams } from "react-router";
 import { ClientOnly } from "~/components/client-only";
+import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/doc";
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const [doc, repos] = await Promise.all([
-    caller.doc.get({ id: params.docId }),
-    caller.repo.list({}),
-  ]);
-  return { doc, repos };
-}
-
-export function meta({ loaderData }: Route.MetaArgs) {
-  const doc = loaderData?.doc;
-  return [{ title: `${doc?.title ?? "Doc"} — nightshift` }];
+export function meta() {
+  return [{ title: "Doc — nightshift" }];
 }
 
 // ── Lazy-loaded editor ────────────────────────────────────────────────────────
@@ -60,19 +46,29 @@ function LazyMarkdownEditor(props: {
 const UNSAVED_CHANGES_MESSAGE = "You have unsaved changes. Leave this page without saving?";
 
 export default function DocEditorPage() {
-  const { doc, repos } = useLoaderData<typeof loader>();
+  const params = useParams();
   const navigate = useNavigate();
+  const { data: doc, isLoading } = trpc.doc.get.useQuery({ id: params.docId! });
+  const { data: repos } = useRepos();
 
-  const [title, setTitle] = useState(doc.title);
-  const [content, setContent] = useState(doc.content);
-  const [repoId, setRepoId] = useState<string | null>(doc.repoId);
-  const [savedSnapshot, setSavedSnapshot] = useState({
-    title: doc.title,
-    content: doc.content,
-    repoId: doc.repoId,
-  });
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [repoId, setRepoId] = useState<string | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState({ title: "", content: "", repoId: null as string | null });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [initialized, setInitialized] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync local state when doc loads for the first time
+  useEffect(() => {
+    if (doc && !initialized) {
+      setTitle(doc.title);
+      setContent(doc.content);
+      setRepoId(doc.repoId);
+      setSavedSnapshot({ title: doc.title, content: doc.content, repoId: doc.repoId });
+      setInitialized(true);
+    }
+  }, [doc, initialized]);
 
   const utils = trpc.useUtils();
 
@@ -88,7 +84,7 @@ export default function DocEditorPage() {
       setContent(updated.content);
       setRepoId(updated.repoId);
       setSaveStatus("saved");
-      utils.doc.get.invalidate({ id: doc.id });
+      utils.doc.get.invalidate({ id: params.docId! });
       utils.doc.list.invalidate();
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
@@ -98,18 +94,19 @@ export default function DocEditorPage() {
 
   const isDirty = useMemo(
     () =>
-      title !== savedSnapshot.title ||
-      content !== savedSnapshot.content ||
-      repoId !== savedSnapshot.repoId,
-    [title, content, repoId, savedSnapshot],
+      initialized &&
+      (title !== savedSnapshot.title ||
+        content !== savedSnapshot.content ||
+        repoId !== savedSnapshot.repoId),
+    [title, content, repoId, savedSnapshot, initialized],
   );
 
   const blocker = useBlocker(isDirty);
 
   const handleSave = useCallback(() => {
-    if (updateDoc.isPending || !isDirty) return;
+    if (updateDoc.isPending || !isDirty || !doc) return;
     updateDoc.mutate({ id: doc.id, title, content, repoId });
-  }, [content, doc.id, isDirty, repoId, title, updateDoc]);
+  }, [content, doc, isDirty, repoId, title, updateDoc]);
 
   const handleBack = useCallback(() => {
     navigate("/docs");
@@ -153,6 +150,8 @@ export default function DocEditorPage() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
+
+  if (isLoading || !doc) return null;
 
   const currentRepo = repoId ? repos.find((r) => r.id === repoId) : null;
 

@@ -1,4 +1,3 @@
-import { createCaller } from "@openralph/backend/lib/caller";
 import type { DocListItem } from "@openralph/backend/types/doc.types";
 import {
   AlertDialog,
@@ -13,60 +12,44 @@ import {
 import { Button } from "@openralph/ui/components/button";
 import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Link, useLoaderData, useNavigate } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
+import { useDocs } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/docs";
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const [repo, docs] = await Promise.all([
-    caller.repo.get({ id: params.repoId }),
-    caller.doc.list({ repoId: params.repoId }),
-  ]);
-  return { repo, docs };
-}
-
-export function meta({ loaderData }: Route.MetaArgs) {
-  const repo = loaderData?.repo;
-  const title = repo ? `Docs — ${repo.owner}/${repo.name}` : "Docs";
-  return [{ title: `${title} — nightshift` }];
+export function meta() {
+  return [{ title: "Docs — nightshift" }];
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function RepoDocs() {
-  const { repo, docs: initialDocs } = useLoaderData<typeof loader>();
+  const params = useParams();
   const navigate = useNavigate();
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const { data } = trpc.doc.list.useQuery({ repoId: repo.id }, { initialData: initialDocs });
-  const docs = data ?? initialDocs;
-
-  const utils = trpc.useUtils();
+  const { data: repo, isLoading } = trpc.repo.get.useQuery({ id: params.repoId! });
+  const { data: docs, collection: docCollection } = useDocs({ repoId: params.repoId });
 
   const createDoc = trpc.doc.create.useMutation({
     onSuccess: (doc) => {
-      utils.doc.list.invalidate();
       navigate(`/docs/${doc.id}`);
     },
   });
 
-  const deleteDoc = trpc.doc.delete.useMutation({
-    onSuccess: () => {
-      utils.doc.list.invalidate();
-      setDeleteId(null);
-    },
-  });
+  function handleDeleteDoc(id: string) {
+    docCollection.delete(id);
+    setDeleteId(null);
+  }
 
   function handleCreate() {
     createDoc.mutate({
-      repoId: repo.id,
+      repoId: params.repoId,
       title: "Untitled Document",
       content: "",
     });
   }
+
+  if (isLoading || !repo) return null;
 
   return (
     <div className="flex h-full flex-col overflow-auto p-6">
@@ -159,10 +142,9 @@ export default function RepoDocs() {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => deleteId && deleteDoc.mutate({ id: deleteId })}
-                disabled={deleteDoc.isPending}
+                onClick={() => deleteId && handleDeleteDoc(deleteId)}
               >
-                {deleteDoc.isPending ? "Deleting…" : "Delete"}
+                Delete
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

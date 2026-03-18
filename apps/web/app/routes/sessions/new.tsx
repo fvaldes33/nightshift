@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createCaller } from "@openralph/backend/lib/caller";
 import { insertSessionSchema } from "@openralph/db/models/index";
 import { Button } from "@openralph/ui/components/button";
 import {
@@ -23,10 +22,10 @@ import { Input } from "@openralph/ui/components/input";
 import { Loader2Icon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLoaderData, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { z } from "zod";
+import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/new";
 
 function slugify(text: string): string {
   return text
@@ -51,21 +50,13 @@ type RepoOption = {
   isLocal: boolean;
 };
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const [repos, githubRepos] = await Promise.all([
-    caller.repo.list({}),
-    caller.repo.listGitHub({}).catch(() => []),
-  ]);
-  return { repos, githubRepos };
-}
-
 export function meta() {
   return [{ title: "New Session — nightshift" }];
 }
 
 export default function NewSession() {
-  const { repos, githubRepos } = useLoaderData<typeof loader>();
+  const { data: repos } = useRepos();
+  const { data: githubRepos = [] } = trpc.repo.listGitHub.useQuery({});
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [branchTouched, setBranchTouched] = useState(false);

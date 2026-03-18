@@ -8,6 +8,7 @@ import {
   SidebarMenuItem,
 } from "@openralph/ui/components/sidebar";
 import { Link } from "react-router";
+import { useLoops } from "~/hooks/use-collection";
 
 type LoopItem = {
   id: string;
@@ -24,7 +25,9 @@ const statusColor: Record<string, string> = {
   failed: "bg-destructive-foreground",
 };
 
-export function LoopNav({ loops }: { loops: LoopItem[] }) {
+export function LoopNav() {
+  const { data: loops } = useLoops();
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="font-mono text-[11px] uppercase tracking-wider">

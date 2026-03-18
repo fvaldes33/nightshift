@@ -1,5 +1,5 @@
 {
-  "name": "openralph",
+  "name": "nightshift",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -8,17 +8,24 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "typecheck": "turbo run typecheck",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:migrate": "supabase migration up",
+    "db:push": "supabase migration up",
+    "db:reset": "supabase db reset",
+    "db:studio": "drizzle-kit studio",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:reset": "supabase db reset"
   },
   "devDependencies": {
     "@mantine/hooks": "^8.3.17",
+    "@tanstack/intent": "^0.0.23",
     "@tanstack/react-table": "^8.21.3",
     "drizzle-kit": "^0.31.9",
     "prettier": "^3.7.4",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.11",
+    "supabase": "2.81.2",
     "turbo": "^2.8.17",
     "typescript": "5.9.2",
     "web": "workspace:*"

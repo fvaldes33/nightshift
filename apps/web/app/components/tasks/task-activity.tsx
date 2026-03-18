@@ -8,16 +8,14 @@ import { trpc } from "~/lib/trpc-react";
 interface TaskActivityProps {
   taskId: string;
   comments: TaskComment[];
-  onCommentAdded: () => void;
 }
 
-export function TaskActivity({ taskId, comments, onCommentAdded }: TaskActivityProps) {
+export function TaskActivity({ taskId, comments }: TaskActivityProps) {
   const [text, setText] = useState("");
 
   const addComment = trpc.task.addComment.useMutation({
     onSuccess: () => {
       setText("");
-      onCommentAdded();
     },
   });
 
@@ -47,7 +45,6 @@ export function TaskActivity({ taskId, comments, onCommentAdded }: TaskActivityP
               comment={c}
               taskId={taskId}
               allComments={comments}
-              onUpdated={onCommentAdded}
             />
           ))}
         </div>
@@ -82,12 +79,10 @@ function CommentItem({
   comment,
   taskId,
   allComments,
-  onUpdated,
 }: {
   comment: TaskComment;
   taskId: string;
   allComments: TaskComment[];
-  onUpdated: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(comment.content);
@@ -96,7 +91,6 @@ function CommentItem({
   const updateTask = trpc.task.update.useMutation({
     onSuccess: () => {
       setEditing(false);
-      onUpdated();
     },
   });
 

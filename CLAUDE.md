@@ -54,9 +54,13 @@ packages/common/    → Shared utilities
 
 ### Database
 
-PostgreSQL on Neon. Two connections:
-- **Drizzle** (`packages/db/`): Uses `@neondatabase/serverless` HTTP adapter for queries
+Local Supabase PostgreSQL. Two connections:
+- **Drizzle** (`packages/db/`): Uses `postgres.js` adapter for queries
 - **pgBoss**: Uses `postgres.js` direct TCP connection (separate `QUEUE_DATABASE_URL`)
+
+### Realtime & Collections
+
+Supabase Realtime enabled on all tables. TanStack DB collections (`apps/web/app/lib/collections/`) load data via TanStack Query and get live updates via Supabase `postgres_changes` WebSocket. `useLiveQuery` replaces `trpc.useQuery` in list views. SSR loaders remain for initial HTML; collections hydrate on the client. Vanilla tRPC client (`apps/web/app/lib/trpc-vanilla.ts`) exposed via `NightshiftContext` for collection mutation handlers.
 
 Models in `packages/db/src/models/*.model.ts`: user/session/account (BetterAuth), repos, sessions, tasks (hierarchical with subtasks, jsonb comments), loops, messages (jsonb parts), docs.
 
@@ -76,3 +80,19 @@ BetterAuth with email/password + GitHub OAuth. User creation gated by email allo
 - **Frontend**: Tailwind v4, shadcn/ui components. Path alias `~/` maps to `apps/web/app/`.
 - **tRPC**: SuperJSON transformer. `publicProcedure` and `protectedProcedure` (requires authenticated actor). AppError maps to TRPCError codes.
 - **Scrolling**: `overflow-hidden` on shell layout, `overflow-auto` on page content. No absolute wrappers.
+- **Collections**: List views use TanStack DB collections + `useLiveQuery`. Detail views keep `trpc.useQuery` with realtime invalidation. No manual `invalidateQueries` or `refetchInterval` — Supabase Realtime handles it.
+
+<!-- intent-skills:start -->
+# Skill mappings - when working in these areas, load the linked skill file into context.
+skills:
+  - task: "Creating or modifying TanStack DB collections (apps/web/app/lib/collections/)"
+    load: "apps/web/node_modules/@tanstack/db/skills/db-core/collection-setup/SKILL.md"
+  - task: "Writing live queries with useLiveQuery, filtering, sorting, or joining collections"
+    load: "apps/web/node_modules/@tanstack/db/skills/db-core/live-queries/SKILL.md"
+  - task: "Optimistic mutations, collection.insert/update/delete, or transaction handling"
+    load: "apps/web/node_modules/@tanstack/db/skills/db-core/mutations-optimistic/SKILL.md"
+  - task: "Using React hooks for TanStack DB (useLiveQuery, useLiveSuspenseQuery, usePacedMutations)"
+    load: "apps/web/node_modules/@tanstack/react-db/skills/react-db/SKILL.md"
+  - task: "Integrating TanStack DB with React Router loaders or SSR"
+    load: "apps/web/node_modules/@tanstack/db/skills/meta-framework/SKILL.md"
+<!-- intent-skills:end -->

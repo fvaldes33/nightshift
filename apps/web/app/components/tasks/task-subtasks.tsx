@@ -15,10 +15,9 @@ type Subtask = TaskGetOutput["subtasks"][number];
 interface TaskSubtasksProps {
   taskId: string;
   subtasks: Subtask[];
-  onCreated: () => void;
 }
 
-export function TaskSubtasks({ taskId, subtasks, onCreated }: TaskSubtasksProps) {
+export function TaskSubtasks({ taskId, subtasks }: TaskSubtasksProps) {
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -27,7 +26,6 @@ export function TaskSubtasks({ taskId, subtasks, onCreated }: TaskSubtasksProps)
     onSuccess: () => {
       setNewTitle("");
       setAdding(false);
-      onCreated();
     },
   });
 

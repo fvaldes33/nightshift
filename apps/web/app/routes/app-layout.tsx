@@ -1,6 +1,3 @@
-import { auth } from "@openralph/backend/lib/auth";
-import { createCaller } from "@openralph/backend/lib/caller";
-import { ActorContext } from "@openralph/backend/lib/context";
 import {
   Sidebar,
   SidebarContent,
@@ -14,38 +11,22 @@ import {
   SidebarProvider,
 } from "@openralph/ui/components/sidebar";
 import { ListTodoIcon, NotebookTextIcon } from "lucide-react";
-import { Link, Outlet, redirect, useLoaderData } from "react-router";
+import { Link, Outlet, redirect } from "react-router";
 import { LoopNav } from "~/components/loop-nav";
 import { RepoNav } from "~/components/repo-nav";
 import { SessionNav } from "~/components/session-nav";
 import { UserFooter } from "~/components/user-footer";
+import { getSession } from "~/lib/auth-client";
 import type { Route } from "./+types/app-layout";
 
-export const middleware: Route.MiddlewareFunction[] = [
-  async ({ request }, next) => {
-    const session = await auth.api.getSession({ headers: request.headers });
-    if (!session?.user) throw redirect("/login");
-
-    return ActorContext.with({ type: "user", properties: { user: session.user } }, () => next());
-  },
-];
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const actor = ActorContext.use();
-  if (actor.type !== "user") throw redirect("/login");
-
-  const caller = createCaller(request);
-  const [sessions, repos, loops] = await Promise.all([
-    caller.session.list({}),
-    caller.repo.list({}),
-    caller.loop.list({}),
-  ]);
-
-  return { user: actor.properties.user, sessions, repos, loops };
+export async function clientLoader() {
+  const session = await getSession();
+  if (!session?.data?.user) throw redirect("/login");
+  return { user: session.data.user };
 }
 
-export default function AppLayout() {
-  const { user, sessions, repos, loops } = useLoaderData<typeof loader>();
+export default function AppLayout({ loaderData }: Route.ComponentProps) {
+  const { user } = loaderData;
 
   return (
     <SidebarProvider className="max-h-svh">
@@ -79,9 +60,9 @@ export default function AppLayout() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          <SessionNav sessions={sessions} />
-          <RepoNav repos={repos} />
-          <LoopNav loops={loops} />
+          <SessionNav />
+          <RepoNav />
+          <LoopNav />
         </SidebarContent>
 
         <UserFooter name={user.name} email={user.email} image={user.image ?? null} />

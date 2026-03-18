@@ -8,6 +8,7 @@ import {
 } from "@openralph/ui/components/sidebar";
 import { FolderGitIcon } from "lucide-react";
 import { Link } from "react-router";
+import { useRepos } from "~/hooks/use-collection";
 
 type RepoItem = {
   id: string;
@@ -15,7 +16,9 @@ type RepoItem = {
   name: string;
 };
 
-export function RepoNav({ repos }: { repos: RepoItem[] }) {
+export function RepoNav() {
+  const { data: repos } = useRepos();
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="font-mono text-[11px] uppercase tracking-wider">

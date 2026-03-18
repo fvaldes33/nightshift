@@ -25,28 +25,27 @@ import {
 } from "@openralph/ui/components/sidebar";
 import { MessageSquareIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate, useParams, useRevalidator } from "react-router";
-import { trpc } from "~/lib/trpc-react";
+import { Link, useNavigate, useParams } from "react-router";
+import { useSessions } from "~/hooks/use-collection";
 
 type SessionItem = {
   id: string;
   title: string;
 };
 
-export function SessionNav({ sessions }: { sessions: SessionItem[] }) {
-  const revalidator = useRevalidator();
+export function SessionNav() {
+  const { data: sessions, collection: sessionCollection } = useSessions();
   const navigate = useNavigate();
   const params = useParams();
   const [deleteTarget, setDeleteTarget] = useState<SessionItem | null>(null);
-  const deleteSession = trpc.session.delete.useMutation({
-    onSuccess: (_, variables) => {
-      setDeleteTarget(null);
-      if (params.sessionId === variables.id) {
-        navigate("/");
-      }
-      revalidator.revalidate();
-    },
-  });
+
+  function handleDeleteSession(id: string) {
+    sessionCollection.delete(id);
+    setDeleteTarget(null);
+    if (params.sessionId === id) {
+      navigate("/");
+    }
+  }
 
   return (
     <>
@@ -100,8 +99,7 @@ export function SessionNav({ sessions }: { sessions: SessionItem[] }) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={deleteSession.isPending}
-              onClick={() => deleteTarget && deleteSession.mutate({ id: deleteTarget.id })}
+              onClick={() => deleteTarget && handleDeleteSession(deleteTarget.id)}
             >
               Delete
             </AlertDialogAction>

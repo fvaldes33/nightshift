@@ -1,5 +1,4 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { createCaller } from "@openralph/backend/lib/caller";
 import type { RepoListItem } from "@openralph/backend/types/repo.types";
 import { insertTaskSchema, taskStatusEnum } from "@openralph/db/models/task.model";
 import { Button } from "@openralph/ui/components/button";
@@ -38,14 +37,13 @@ import { Textarea } from "@openralph/ui/components/textarea";
 import { ListTodoIcon, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLoaderData, useRevalidator } from "react-router";
 import { z } from "zod";
 import { ListFilterMenu } from "~/components/list-filter-menu";
 import { statusConfig } from "~/components/task-columns";
 import { TaskTable } from "~/components/task-table";
+import { useRepos, useTasks } from "~/hooks/use-collection";
 import { useTableParams } from "~/hooks/use-table-params";
-import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/index";
+import { createTaskCollection } from "~/lib/collections";
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -59,20 +57,6 @@ const createTaskSchema = insertTaskSchema.pick({
 
 type CreateTaskForm = z.infer<typeof createTaskSchema>;
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const url = new URL(request.url);
-  const status = url.searchParams.get("status") ?? undefined;
-  const assignee = url.searchParams.get("assignee") ?? undefined;
-  const [tasks, repos] = await Promise.all([
-    caller.task.list({ status, assignee }),
-    caller.repo.list({}),
-  ]);
-  return { tasks, repos };
-}
-
 export function meta() {
   return [{ title: "Tasks — nightshift" }];
 }
@@ -80,22 +64,17 @@ export function meta() {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function Tasks() {
-  const { tasks: initialTasks, repos } = useLoaderData<typeof loader>();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { filters, setFilter } = useTableParams({
     filterKeys: ["status", "assignee"] as const,
   });
 
-  const { data } = trpc.task.list.useQuery(
-    {
-      status: filters.status,
-      assignee: filters.assignee,
-    },
-    { initialData: initialTasks },
-  );
-
-  const tasks = data ?? initialTasks;
+  const { data: tasks, collection: taskCollection } = useTasks({
+    status: filters.status,
+    assignee: filters.assignee,
+  });
+  const { data: repos } = useRepos();
 
   const hasFilters = filters.status || filters.assignee;
   const isEmpty = tasks.length === 0 && !hasFilters;
@@ -114,7 +93,7 @@ export default function Tasks() {
             New task
           </Button>
         </div>
-        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} />
+        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} taskCollection={taskCollection} />
       </>
     );
   }
@@ -167,7 +146,7 @@ export default function Tasks() {
         <TaskTable tasks={tasks} />
       </div>
 
-      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} />
+      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} taskCollection={taskCollection} />
     </>
   );
 }
@@ -185,14 +164,13 @@ function CreateTaskDialog({
   open,
   onOpenChange,
   repos,
+  taskCollection,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repos: RepoListItem[];
+  taskCollection: ReturnType<typeof createTaskCollection>;
 }) {
-  const revalidator = useRevalidator();
-  const utils = trpc.useUtils();
-
   const form = useForm<CreateTaskForm>({
     resolver: zodResolver(createTaskSchema),
     defaultValues: {
@@ -204,21 +182,22 @@ function CreateTaskDialog({
     },
   });
 
-  const createTask = trpc.task.create.useMutation({
-    onSuccess: () => {
-      onOpenChange(false);
-      form.reset();
-      utils.task.list.invalidate();
-      revalidator.revalidate();
-    },
-  });
-
   function onSubmit(values: CreateTaskForm) {
-    createTask.mutate({
+    taskCollection.insert({
+      id: crypto.randomUUID(),
       ...values,
-      description: values.description?.trim() || undefined,
+      description: values.description?.trim() || null,
       labels: [],
-    });
+      assignee: null,
+      sessionId: null,
+      parentId: null,
+      comments: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      subtasks: [],
+    } as any);
+    onOpenChange(false);
+    form.reset();
   }
 
   const selectedRepoId = form.watch("repoId");
@@ -361,8 +340,8 @@ function CreateTaskDialog({
             </div>
 
             <DialogFooter>
-              <Button type="submit" size="sm" disabled={createTask.isPending}>
-                {createTask.isPending ? "Creating..." : "Create Task"}
+              <Button type="submit" size="sm">
+                Create Task
               </Button>
             </DialogFooter>
           </form>

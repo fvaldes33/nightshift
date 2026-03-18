@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -14,7 +14,11 @@ import superjson from "superjson";
 import { TooltipProvider } from "@openralph/ui/components/tooltip";
 import type { Route } from "./+types/root";
 import "./app.css";
+import { useRealtimeInvalidation } from "./hooks/use-realtime-invalidation";
+import { NightshiftContext } from "./lib/nightshift-context";
+import { useSupabaseClient } from "./lib/supabase";
 import { trpc } from "./lib/trpc-react";
+import { createVanillaTRPCClient } from "./lib/trpc-vanilla";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -47,6 +51,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+export function HydrateFallback() {
+  return null;
+}
+
 export default function App() {
   const [queryClient] = useState(() => new QueryClient());
   const [trpcClient] = useState(() =>
@@ -59,14 +67,22 @@ export default function App() {
       ],
     }),
   );
+  const [vanillaTRPC] = useState(() => createVanillaTRPCClient());
+  const supabase = useSupabaseClient();
+
+  useRealtimeInvalidation(supabase, queryClient);
+
+  const nightshiftCtx = useMemo(() => ({ vanillaTRPC }), [vanillaTRPC]);
 
   return (
     <TooltipProvider delayDuration={150}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <Outlet />
-        </QueryClientProvider>
-      </trpc.Provider>
+      <NightshiftContext.Provider value={nightshiftCtx}>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <Outlet />
+          </QueryClientProvider>
+        </trpc.Provider>
+      </NightshiftContext.Provider>
     </TooltipProvider>
   );
 }

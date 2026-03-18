@@ -39,7 +39,13 @@ const DEVELOPMENT = process.env.NODE_ENV === "development";
 
 const app = express();
 
-app.use(compression());
+app.use(compression({
+  filter: (req) => {
+    // Skip compression for streaming endpoints
+    if (req.url.startsWith("/api/chat")) return false;
+    return compression.filter(req, req.res);
+  },
+}));
 
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 app.use((req, res, next) => {

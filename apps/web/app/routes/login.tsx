@@ -1,18 +1,14 @@
-import { auth } from "@openralph/backend/lib/auth";
-import { GithubIcon } from "lucide-react";
-import { useState } from "react";
-import { redirect } from "react-router";
 import { Button } from "@openralph/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@openralph/ui/components/card";
 import { Input } from "@openralph/ui/components/input";
-import { signIn } from "~/lib/auth-client";
-import type { Route } from "./+types/login";
+import { GithubIcon } from "lucide-react";
+import { useState } from "react";
+import { redirect } from "react-router";
+import { getSession, signIn } from "~/lib/auth-client";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (session?.user) {
-    throw redirect("/");
-  }
+export async function clientLoader() {
+  const session = await getSession();
+  if (session?.data?.user) throw redirect("/");
   return null;
 }
 
@@ -36,9 +32,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error: authError } = await signIn.email(
-      { email, password, callbackURL: "/" },
-    );
+    const { error: authError } = await signIn.email({ email, password, callbackURL: "/" });
     if (authError) {
       setError(authError.message ?? "Sign in failed");
       setLoading(false);
@@ -46,10 +40,10 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm border-border/50">
+    <div className="bg-background flex min-h-screen items-center justify-center p-4">
+      <Card className="border-border/50 w-full max-w-sm">
         <CardHeader className="text-center">
-          <p className="font-mono text-xs text-muted-foreground tracking-widest uppercase mb-2">
+          <p className="text-muted-foreground mb-2 font-mono text-xs uppercase tracking-widest">
             openralph
           </p>
           <CardTitle className="text-xl">Sign in</CardTitle>
@@ -66,9 +60,9 @@ export default function Login() {
           </Button>
 
           <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted-foreground font-mono">or</span>
-            <div className="h-px flex-1 bg-border" />
+            <div className="bg-border h-px flex-1" />
+            <span className="text-muted-foreground font-mono text-xs">or</span>
+            <div className="bg-border h-px flex-1" />
           </div>
 
           <form onSubmit={handleEmail} className="flex flex-col gap-3">
@@ -88,9 +82,7 @@ export default function Login() {
               required
               disabled={loading}
             />
-            {error && (
-              <p className="text-sm text-destructive-foreground">{error}</p>
-            )}
+            {error && <p className="text-destructive-foreground text-sm">{error}</p>}
             <Button type="submit" disabled={loading}>
               Sign in
             </Button>

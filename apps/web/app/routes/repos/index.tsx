@@ -1,4 +1,3 @@
-import { createCaller } from "@openralph/backend/lib/caller";
 import type { RepoListItem } from "@openralph/backend/types/repo.types";
 import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
@@ -13,10 +12,10 @@ import { type ColumnDef, getCoreRowModel, getSortedRowModel, useReactTable } fro
 import { useDebouncedCallback } from "@mantine/hooks";
 import { CheckIcon, FolderGitIcon, Loader2Icon, Plus, Search } from "lucide-react";
 import { useState } from "react";
-import { useLoaderData, useNavigate, useRevalidator } from "react-router";
+import { useNavigate } from "react-router";
 import { DataTable } from "~/components/data-table";
+import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
-import type { Route } from "./+types/index";
 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
@@ -51,14 +50,6 @@ const columns: ColumnDef<RepoListItem>[] = [
   },
 ];
 
-// ── Loader ────────────────────────────────────────────────────────────────────
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const caller = createCaller(request);
-  const repos = await caller.repo.list({});
-  return { repos };
-}
-
 export function meta() {
   return [{ title: "Repos — nightshift" }];
 }
@@ -66,13 +57,10 @@ export function meta() {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function Repos() {
-  const { repos: initialRepos } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const revalidator = useRevalidator();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { data } = trpc.repo.list.useQuery({}, { initialData: initialRepos });
-  const repos = data ?? initialRepos;
+  const { data: repos } = useRepos();
 
   const table = useReactTable({
     data: repos,
@@ -100,7 +88,7 @@ export default function Repos() {
         <ImportRepoDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          onSuccess={() => revalidator.revalidate()}
+          onSuccess={() => {}}
         />
       </>
     );
@@ -127,7 +115,7 @@ export default function Repos() {
       <ImportRepoDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSuccess={() => revalidator.revalidate()}
+        onSuccess={() => {}}
       />
     </>
   );
