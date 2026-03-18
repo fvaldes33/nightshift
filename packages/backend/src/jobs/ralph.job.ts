@@ -7,6 +7,7 @@ import { createQueue } from "../lib/queue-builder";
 import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
 import { assembleRalphPrompt } from "../services/prompt.service";
 import { listTasks } from "../services/task.service";
+import { createWorktree, ensureRepoWorkspace } from "../services/workspace.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,7 +64,20 @@ ralphLoopQueue.work(async (job) => {
   console.log(`[ralph] Starting loop ${loopId}`);
 
   const loop = await getLoop({ id: loopId });
-  await updateLoop({ id: loopId, status: "running" });
+  if (!loop.repo) throw new Error(`Loop ${loopId} has no associated repo`);
+
+  // Ensure repo is cloned locally
+  const repoDir = await ensureRepoWorkspace(loop.repo);
+
+  // Create worktree for non-default branches, otherwise use repo dir directly
+  let worktree: string;
+  if (loop.branch && loop.branch !== loop.repo.defaultBranch) {
+    worktree = createWorktree({ repoDir, id: loop.id, branch: loop.branch });
+  } else {
+    worktree = repoDir;
+  }
+
+  await updateLoop({ id: loopId, status: "running", worktree });
 
   // Queue the first iteration
   await ralphIterationQueue.send({ loopId, iteration: loop.currentIteration });

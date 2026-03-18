@@ -78,11 +78,11 @@ export async function ensureRepoWorkspace(repo: Repo): Promise<string> {
 /** Creates a git worktree on the given branch. Returns the worktree path. */
 export function createWorktree(opts: {
   repoDir: string;
-  sessionId: string;
+  id: string;
   branch: string;
 }): string {
   ensureDir(WORKTREES_DIR);
-  const worktreePath = join(WORKTREES_DIR, opts.sessionId);
+  const worktreePath = join(WORKTREES_DIR, opts.id);
 
   if (existsSync(worktreePath)) {
     return worktreePath;

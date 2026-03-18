@@ -53,11 +53,10 @@ export const loopRouter = router({
   start: protectedProcedure
     .input(
       z.object({
-        sessionId: z.uuid(),
+        sessionId: z.uuid().optional(),
         repoId: z.uuid(),
         name: z.string(),
         branch: z.string().optional(),
-        worktree: z.string().optional(),
         maxIterations: z.number().int().default(10),
         filterConfig: z
           .object({

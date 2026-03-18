@@ -24,15 +24,23 @@ import {
   SelectValue,
 } from "@openralph/ui/components/select";
 import { Loader2Icon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRepos, useSessions } from "~/hooks/use-collection";
+import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 const startLoopSchema = z.object({
   name: z.string().min(1, "Name is required"),
   repoId: z.string().uuid("Select a repository"),
-  sessionId: z.string().uuid("Select a session"),
+  branch: z.string().optional(),
   maxIterations: z.number().int().min(1).max(100),
 });
 
@@ -48,22 +56,34 @@ export function StartLoopDialog({
   repoId?: string;
 }) {
   const { data: repos } = useRepos();
-  const { data: sessions } = useSessions({ repoId });
+  const [branchTouched, setBranchTouched] = useState(false);
 
   const form = useForm<StartLoopForm>({
     resolver: zodResolver(startLoopSchema),
     defaultValues: {
       name: "",
       repoId: repoId ?? "",
-      sessionId: "",
+      branch: "",
       maxIterations: 10,
     },
   });
+
+  const name = form.watch("name");
+
+  // Auto-derive branch from name unless user has manually edited it
+  useEffect(() => {
+    if (!branchTouched && name) {
+      form.setValue("branch", `nightshift/${slugify(name)}`);
+    } else if (!branchTouched && !name) {
+      form.setValue("branch", "");
+    }
+  }, [name, branchTouched, form]);
 
   const startLoop = trpc.loop.start.useMutation({
     onSuccess: () => {
       onOpenChange(false);
       form.reset();
+      setBranchTouched(false);
     },
   });
 
@@ -122,24 +142,20 @@ export function StartLoopDialog({
 
             <FormField
               control={form.control}
-              name="sessionId"
+              name="branch"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Session</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger size="sm">
-                        <SelectValue placeholder="Select session" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {sessions.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>Branch</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="nightshift/my-feature"
+                      {...field}
+                      onChange={(e) => {
+                        setBranchTouched(true);
+                        field.onChange(e);
+                      }}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

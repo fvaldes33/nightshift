@@ -48,12 +48,12 @@ export const createLoop = fn(
     maxIterations: true,
   }),
   async (input) => {
-    // Carry forward PR info from sibling loops on the same session/branch
+    // Carry forward PR info from sibling loops on the same repo/branch
     let prFields: { prNumber: number; prUrl: string; prStatus: "open" | "merged" | "closed" } | undefined;
-    if (input.sessionId && input.branch) {
+    if (input.repoId && input.branch) {
       const sibling = await db.query.loops.findFirst({
         where: and(
-          eq(loops.sessionId, input.sessionId),
+          eq(loops.repoId, input.repoId),
           eq(loops.branch, input.branch),
         ),
         columns: { prNumber: true, prUrl: true, prStatus: true },

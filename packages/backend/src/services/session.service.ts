@@ -74,7 +74,7 @@ export async function ensureWorktree(session: Awaited<ReturnType<typeof getSessi
   // Different branch — create a worktree
   return createWorktree({
     repoDir,
-    sessionId: session.id,
+    id: session.id,
     branch: session.branch,
   });
 }
