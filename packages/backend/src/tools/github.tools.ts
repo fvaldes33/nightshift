@@ -1,13 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { execSync } from "node:child_process";
-import { Octokit } from "octokit";
 import { AgentContext } from "../lib/context";
-
-function getOctokit() {
-  const { githubToken } = AgentContext.use();
-  return new Octokit({ auth: githubToken });
-}
+import {
+  addPRLabels,
+  addPRReviewers,
+  createPullRequest,
+  listPullRequests,
+} from "../services/github.service";
 
 function getRepoInfo() {
   const ctx = AgentContext.use();
@@ -95,7 +95,7 @@ export const push_branch = tool({
 });
 
 // ---------------------------------------------------------------------------
-// GitHub API operations (via Octokit + tool context)
+// GitHub API operations — thin wrappers that read AgentContext and delegate
 // ---------------------------------------------------------------------------
 
 export const create_pull_request = tool({
@@ -108,13 +108,13 @@ export const create_pull_request = tool({
     draft: z.boolean().default(false).describe("Create as draft PR"),
   }),
   execute: async ({ title, body, base, draft }) => {
-    const octokit = getOctokit();
-    const { owner, repo } = getRepoInfo();
     const ctx = AgentContext.use();
+    const { owner, repo } = getRepoInfo();
     const head = ctx.branch;
     if (!head) throw new Error("No branch set for this session");
 
-    const { data } = await octokit.request("POST /repos/{owner}/{repo}/pulls", {
+    return createPullRequest({
+      token: ctx.githubToken,
       owner,
       repo,
       head,
@@ -123,7 +123,6 @@ export const create_pull_request = tool({
       body,
       draft,
     });
-    return { url: data.html_url, number: data.number };
   },
 });
 
@@ -134,23 +133,16 @@ export const list_pull_requests = tool({
     head: z.string().optional().describe("Filter by head branch (format: owner:branch)"),
   }),
   execute: async ({ state, head }) => {
-    const octokit = getOctokit();
+    const ctx = AgentContext.use();
     const { owner, repo } = getRepoInfo();
-    const { data } = await octokit.request("GET /repos/{owner}/{repo}/pulls", {
+
+    return listPullRequests({
+      token: ctx.githubToken,
       owner,
       repo,
       state,
       head,
     });
-    return data.map((pr) => ({
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      url: pr.html_url,
-      head: pr.head.ref,
-      base: pr.base.ref,
-      draft: pr.draft,
-    }));
   },
 });
 
@@ -161,21 +153,16 @@ export const add_pr_reviewers = tool({
     reviewers: z.array(z.string()).describe("GitHub usernames to request review from"),
   }),
   execute: async ({ pullNumber, reviewers }) => {
-    const octokit = getOctokit();
+    const ctx = AgentContext.use();
     const { owner, repo } = getRepoInfo();
-    const { data } = await octokit.request(
-      "POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers",
-      {
-        owner,
-        repo,
-        pull_number: pullNumber,
-        reviewers,
-      },
-    );
-    return {
-      number: data.number,
-      requested_reviewers: data.requested_reviewers?.map((r) => r.login),
-    };
+
+    return addPRReviewers({
+      token: ctx.githubToken,
+      owner,
+      repo,
+      pullNumber,
+      reviewers,
+    });
   },
 });
 
@@ -186,17 +173,15 @@ export const add_pr_labels = tool({
     labels: z.array(z.string()).describe("Labels to add"),
   }),
   execute: async ({ issueNumber, labels }) => {
-    const octokit = getOctokit();
+    const ctx = AgentContext.use();
     const { owner, repo } = getRepoInfo();
-    const { data } = await octokit.request(
-      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
-      {
-        owner,
-        repo,
-        issue_number: issueNumber,
-        labels,
-      },
-    );
-    return data.map((l) => l.name);
+
+    return addPRLabels({
+      token: ctx.githubToken,
+      owner,
+      repo,
+      issueNumber,
+      labels,
+    });
   },
 });

@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { repos } from "./repo.model";
@@ -32,6 +41,9 @@ export const loops = pgTable(
     branch: text("branch"),
     worktree: text("worktree"),
     filterConfig: jsonb("filter_config").$type<LoopFilterConfig>(),
+    prNumber: integer("pr_number"),
+    prUrl: text("pr_url"),
+    prStatus: text("pr_status").$type<"open" | "merged" | "closed">(),
     currentIteration: integer("current_iteration").notNull().default(0),
     maxIterations: integer("max_iterations").notNull().default(10),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -49,17 +61,21 @@ export const loops = pgTable(
 );
 
 const zLoopStatus = z.enum(loopStatusEnum.enumValues);
+const zPRStatus = z.enum(["open", "merged", "closed"]);
 
 export const insertLoopSchema = createInsertSchema(loops, {
   status: zLoopStatus,
+  prStatus: zPRStatus.nullish(),
   filterConfig: zLoopFilterConfigSchema.nullish(),
 });
 export const selectLoopSchema = createSelectSchema(loops, {
   status: zLoopStatus,
+  prStatus: zPRStatus.nullable(),
   filterConfig: zLoopFilterConfigSchema.nullable(),
 });
 export const updateLoopSchema = createUpdateSchema(loops, {
   status: zLoopStatus.optional(),
+  prStatus: zPRStatus.nullish(),
   filterConfig: zLoopFilterConfigSchema.nullish(),
 });
 

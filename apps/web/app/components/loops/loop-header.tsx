@@ -19,9 +19,20 @@ import {
   DropdownMenuTrigger,
 } from "@openralph/ui/components/dropdown-menu";
 import { Progress } from "@openralph/ui/components/progress";
-import { ArrowLeftIcon, CopyIcon, MoreHorizontalIcon, TrashIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  GitPullRequestIcon,
+  LoaderIcon,
+  MoreHorizontalIcon,
+  RefreshCwIcon,
+  TrashIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { trpc } from "~/lib/trpc-react";
+import { OpenPRDialog } from "./open-pr-dialog";
 
 const statusColor: Record<string, string> = {
   running: "bg-green-500",
@@ -35,8 +46,22 @@ interface LoopHeaderProps {
   onDelete: () => void;
 }
 
+const prStatusColor: Record<string, string> = {
+  open: "text-green-500",
+  merged: "text-purple-500",
+  closed: "text-red-500",
+};
+
 export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const utils = trpc.useUtils();
+
+  const syncPR = trpc.loop.syncPRStatus.useMutation({
+    onSuccess: () => utils.loop.get.invalidate({ id: loop.id }),
+  });
+
+  const canOpenPR = !loop.prUrl && loop.branch && ["complete", "failed"].includes(loop.status);
 
   const progress =
     loop.maxIterations > 0
@@ -82,6 +107,47 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
           </Badge>
         )}
 
+        {loop.prUrl ? (
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
+              <a href={loop.prUrl} target="_blank" rel="noopener noreferrer">
+                <GitPullRequestIcon
+                  className={`size-3 ${prStatusColor[loop.prStatus ?? "open"]}`}
+                />
+                PR #{loop.prNumber}
+                {loop.prStatus && loop.prStatus !== "open" && (
+                  <span className="capitalize">{loop.prStatus}</span>
+                )}
+              </a>
+            </Button>
+            {loop.prStatus !== "merged" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                onClick={() => syncPR.mutate({ id: loop.id })}
+                disabled={syncPR.isPending}
+              >
+                {syncPR.isPending ? (
+                  <LoaderIcon className="size-3 animate-spin" />
+                ) : (
+                  <RefreshCwIcon className="size-3" />
+                )}
+              </Button>
+            )}
+          </div>
+        ) : canOpenPR ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setPrDialogOpen(true)}
+          >
+            <GitPullRequestIcon className="size-3" />
+            Open PR
+          </Button>
+        ) : null}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-7">
@@ -123,6 +189,8 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <OpenPRDialog loop={loop} open={prDialogOpen} onOpenChange={setPrDialogOpen} />
     </>
   );
 }

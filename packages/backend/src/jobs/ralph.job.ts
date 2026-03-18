@@ -5,8 +5,8 @@ import { z } from "zod";
 import { runClaude } from "../lib/claude-runner";
 import { createQueue } from "../lib/queue-builder";
 import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
-import { createMessage } from "../services/message.service";
 import { assembleRalphPrompt } from "../services/prompt.service";
+import { listTasks } from "../services/task.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,28 +159,25 @@ ralphIterationQueue.work(async (job) => {
     // Update iteration count
     await updateLoop({ id: loopId, currentIteration: iteration + 1 });
 
-    // Write iteration result as a message to the session
-    if (loop.sessionId) {
-      await createMessage({
-        sessionId: loop.sessionId,
-        role: "assistant",
-        name: "ralph",
-        parts: [{ type: "text", text: result.summary || "(no output)" }],
-      });
-    }
-
     // If Claude errored, fail this iteration (pgboss may retry)
     if (result.error) {
       throw new Error(result.error);
     }
 
-    // Queue next iteration or mark complete
+    // Check if there's remaining work before queueing next iteration
     const nextIteration = iteration + 1;
-    if (nextIteration < loop.maxIterations) {
+    const remainingTasks = await listTasks({ repoId: loop.repoId, status: "todo" });
+    const inProgressTasks = await listTasks({ repoId: loop.repoId, status: "in_progress" });
+    const hasWork = remainingTasks.length > 0 || inProgressTasks.length > 0;
+
+    if (!hasWork) {
+      await updateLoop({ id: loopId, status: "complete" });
+      console.log(`[ralph] Loop ${loopId} complete — no remaining tasks`);
+    } else if (nextIteration < loop.maxIterations) {
       await ralphIterationQueue.send({ loopId, iteration: nextIteration });
     } else {
       await updateLoop({ id: loopId, status: "complete" });
-      console.log(`[ralph] Loop ${loopId} complete`);
+      console.log(`[ralph] Loop ${loopId} complete — max iterations reached`);
     }
   } catch (error) {
     console.error(`[ralph] Iteration ${iteration + 1} error:`, error);

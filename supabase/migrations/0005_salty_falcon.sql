@@ -1,0 +1,1 @@
+ALTER TABLE "loops" ADD COLUMN "pr_status" text;

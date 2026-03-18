@@ -1,37 +1,82 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { trpc } from "~/lib/trpc-react";
 
-const REALTIME_TABLES = [
-  { table: "repos", queryKeyPrefix: "repo", debounceMs: 750 },
-  { table: "sessions", queryKeyPrefix: "session", debounceMs: 750 },
-  { table: "tasks", queryKeyPrefix: "task", debounceMs: 750 },
-  { table: "loops", queryKeyPrefix: "loop", debounceMs: 750 },
-  { table: "loop_events", queryKeyPrefix: "loop", debounceMs: 250 },
-  { table: "messages", queryKeyPrefix: "message", debounceMs: 750 },
-  { table: "docs", queryKeyPrefix: "doc", debounceMs: 750 },
-] as const;
+const DEBOUNCE_MS: Record<string, number> = {
+  loop_events: 250,
+};
+const DEFAULT_DEBOUNCE = 750;
 
-export function useRealtimeInvalidation(supabase: SupabaseClient, queryClient: QueryClient) {
+/** Maps DB table names → collection query key prefixes */
+const TABLE_TO_COLLECTION_KEY: Record<string, string> = {
+  repos: "repo",
+  sessions: "session",
+  tasks: "task",
+  loops: "loop",
+  loop_events: "loop",
+  messages: "message",
+  docs: "doc",
+};
+
+const REALTIME_TABLES = Object.keys(TABLE_TO_COLLECTION_KEY);
+
+export function useRealtimeInvalidation(supabase: SupabaseClient) {
+  const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     const channel = supabase.channel("db-changes");
 
-    for (const { table, queryKeyPrefix, debounceMs } of REALTIME_TABLES) {
+    const invalidateTable = (table: string) => {
+      // 1. Invalidate tRPC queries (detail views)
+      switch (table) {
+        case "repos":
+          utils.repo.invalidate();
+          break;
+        case "sessions":
+          utils.session.invalidate();
+          break;
+        case "tasks":
+          utils.task.invalidate();
+          break;
+        case "loops":
+        case "loop_events":
+          utils.loop.invalidate();
+          break;
+        case "messages":
+          utils.message.invalidate();
+          // session.get includes messages — invalidate so navigating back shows fresh data
+          utils.session.invalidate();
+          break;
+        case "docs":
+          utils.doc.invalidate();
+          break;
+      }
+
+      // 2. Invalidate TanStack DB collection queries (list views)
+      const collectionKey = TABLE_TO_COLLECTION_KEY[table];
+      if (collectionKey) {
+        queryClient.invalidateQueries({ queryKey: [collectionKey] });
+      }
+    };
+
+    for (const table of REALTIME_TABLES) {
+      const debounceMs = DEBOUNCE_MS[table] ?? DEFAULT_DEBOUNCE;
+
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
         () => {
-          const key = `${table}:${queryKeyPrefix}`;
-          const existing = timers.current.get(key);
+          const existing = timers.current.get(table);
           if (existing) clearTimeout(existing);
 
           timers.current.set(
-            key,
+            table,
             setTimeout(() => {
-              queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
-              timers.current.delete(key);
+              invalidateTable(table);
+              timers.current.delete(table);
             }, debounceMs),
           );
         },
@@ -45,5 +90,5 @@ export function useRealtimeInvalidation(supabase: SupabaseClient, queryClient: Q
       timers.current.clear();
       supabase.removeChannel(channel);
     };
-  }, [supabase, queryClient]);
+  }, [supabase, utils, queryClient]);
 }

@@ -84,7 +84,7 @@ export const run_exploration = tool({
       prompt: fullPrompt,
       cwd,
       timeoutSec: 300,
-      args: ["--max-turns", "20"],
+      args: ["--max-turns", "40"],
       onEvent: (event) => {
         if (event.type === "tool_call") {
           console.log(`[exploration] Tool: ${event.name}`);

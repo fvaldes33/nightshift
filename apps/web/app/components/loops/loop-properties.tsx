@@ -8,6 +8,7 @@ import {
   FolderGit2Icon,
   FolderIcon,
   GitBranchIcon,
+  GitPullRequestIcon,
   ListTodoIcon,
   MessageSquareIcon,
   RepeatIcon,
@@ -51,6 +52,21 @@ export function LoopProperties({ loop }: { loop: LoopGetOutput }) {
         <span className="font-mono text-xs text-muted-foreground">
           {loop.branch ?? "\u2014"}
         </span>
+      </TaskPropertyRow>
+
+      <TaskPropertyRow icon={<GitPullRequestIcon />} label="PR">
+        {loop.prUrl ? (
+          <a
+            href={loop.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground hover:underline text-xs"
+          >
+            #{loop.prNumber}
+          </a>
+        ) : (
+          <span className="text-xs text-muted-foreground">{"\u2014"}</span>
+        )}
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<FolderIcon />} label="Worktree">

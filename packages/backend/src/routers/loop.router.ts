@@ -3,9 +3,12 @@ import { protectedProcedure, router } from "../lib/trpc";
 import {
   createLoop,
   deleteLoop,
+  generatePRSummary,
   getLoop,
   listLoopEvents,
   listLoops,
+  openPR,
+  syncPRStatus,
   updateLoop,
 } from "../services/loop.service";
 
@@ -19,6 +22,19 @@ export const loopRouter = router({
   events: protectedProcedure
     .input(listLoopEvents.schema)
     .query(({ input }) => listLoopEvents(input)),
+
+  /** Generate a PR title + body from loop events using AI. */
+  generatePRSummary: protectedProcedure
+    .input(generatePRSummary.schema)
+    .mutation(({ input }) => generatePRSummary(input)),
+
+  /** Create a GitHub PR for this loop and persist the URL. */
+  openPR: protectedProcedure.input(openPR.schema).mutation(({ input }) => openPR(input)),
+
+  /** Refresh PR status (open/merged/closed) from GitHub. */
+  syncPRStatus: protectedProcedure
+    .input(syncPRStatus.schema)
+    .mutation(({ input }) => syncPRStatus(input)),
 
   /** Create a loop and immediately queue it for processing. */
   start: protectedProcedure

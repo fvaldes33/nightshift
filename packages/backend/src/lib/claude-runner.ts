@@ -222,7 +222,7 @@ export function runClaude(opts: ClaudeRunOptions): Promise<ClaudeRunResult> {
     let timedOut = false;
     let sessionId: string | null = null;
     let model: string | null = null;
-    let summary = "";
+    let lastAssistantText = "";
     let costUsd: number | null = null;
     let usage: ClaudeRunResult["usage"] = null;
     let lineBuffer = "";
@@ -244,9 +244,10 @@ export function runClaude(opts: ClaudeRunOptions): Promise<ClaudeRunResult> {
           sessionId = event.sessionId;
           model = event.model;
         } else if (event.type === "assistant") {
-          summary = event.text; // last assistant text wins
+          lastAssistantText = event.text;
         } else if (event.type === "result") {
-          summary = event.text || summary;
+          // result.text is the authoritative summary; fall back to last assistant text
+          lastAssistantText = event.text || lastAssistantText;
           usage = event.usage;
           costUsd = event.costUsd;
         }
@@ -304,7 +305,7 @@ export function runClaude(opts: ClaudeRunOptions): Promise<ClaudeRunResult> {
         timedOut,
         sessionId,
         model,
-        summary,
+        summary: lastAssistantText,
         costUsd,
         usage,
         error,

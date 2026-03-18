@@ -68,9 +68,6 @@ export default function App() {
     }),
   );
   const [vanillaTRPC] = useState(() => createVanillaTRPCClient());
-  const supabase = useSupabaseClient();
-
-  useRealtimeInvalidation(supabase, queryClient);
 
   const nightshiftCtx = useMemo(() => ({ vanillaTRPC }), [vanillaTRPC]);
 
@@ -79,12 +76,18 @@ export default function App() {
       <NightshiftContext.Provider value={nightshiftCtx}>
         <trpc.Provider client={trpcClient} queryClient={queryClient}>
           <QueryClientProvider client={queryClient}>
-            <Outlet />
+            <AppShell />
           </QueryClientProvider>
         </trpc.Provider>
       </NightshiftContext.Provider>
     </TooltipProvider>
   );
+}
+
+function AppShell() {
+  const supabase = useSupabaseClient();
+  useRealtimeInvalidation(supabase);
+  return <Outlet />;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
