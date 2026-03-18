@@ -14,6 +14,7 @@ export const listMessages = fn(z.object({ sessionId: z.uuid() }), async ({ sessi
 
 export const createMessage = fn(
   insertMessageSchema.pick({
+    id: true,
     sessionId: true,
     role: true,
     name: true,
@@ -21,7 +22,14 @@ export const createMessage = fn(
     metadata: true,
   }),
   async (input) => {
-    const [message] = await db.insert(messages).values(input).returning();
+    const [message] = await db
+      .insert(messages)
+      .values(input)
+      .onConflictDoUpdate({
+        target: messages.id,
+        set: { parts: input.parts, metadata: input.metadata },
+      })
+      .returning();
     if (!message) throw new AppError("Failed to create message", "INTERNAL_ERROR");
     return message;
   },

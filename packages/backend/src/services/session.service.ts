@@ -6,16 +6,13 @@ import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
 import { cleanupWorktree } from "./workspace.service";
 
-export const listSessions = fn(
-  z.object({ repoId: z.uuid().optional() }),
-  async ({ repoId }) => {
-    return db.query.sessions.findMany({
-      where: repoId ? eq(sessions.repoId, repoId) : undefined,
-      orderBy: (s, { desc }) => [desc(s.updatedAt)],
-      with: { repo: true },
-    });
-  },
-);
+export const listSessions = fn(z.object({ repoId: z.uuid().optional() }), async ({ repoId }) => {
+  return db.query.sessions.findMany({
+    where: repoId ? eq(sessions.repoId, repoId) : undefined,
+    orderBy: (s, { desc }) => [desc(s.updatedAt)],
+    with: { repo: true },
+  });
+});
 
 export const getSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const session = await db.query.sessions.findFirst({
@@ -27,7 +24,14 @@ export const getSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
 });
 
 export const createSession = fn(
-  insertSessionSchema.pick({ repoId: true, title: true, mode: true, branch: true }),
+  insertSessionSchema.pick({
+    repoId: true,
+    title: true,
+    mode: true,
+    branch: true,
+    provider: true,
+    model: true,
+  }),
   async (input) => {
     const [session] = await db.insert(sessions).values(input).returning();
     if (!session) throw new AppError("Failed to create session", "INTERNAL_ERROR");

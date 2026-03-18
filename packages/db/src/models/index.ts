@@ -4,5 +4,6 @@ export * from "./session.model";
 export * from "./message.model";
 export * from "./task.model";
 export * from "./loop.model";
+export * from "./loop-event.model";
 export * from "./doc.model";
 export * from "./relations";

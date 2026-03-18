@@ -1,7 +1,8 @@
 import { Chat } from "@ai-sdk/react";
-import type { NightshiftMessage } from "@openralph/backend/tools/index";
+import type { NightshiftDataTypes, NightshiftMessage } from "@openralph/backend/tools/index";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import { createContext, useContext, useState } from "react";
+import { useExplorationStore } from "~/hooks/use-exploration-store";
 
 export interface SessionContext {
   id: string;
@@ -17,12 +18,27 @@ interface ChatContextValue {
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
 
-function createChatInstance(session: SessionContext, initialMessages: NightshiftMessage[]) {
+function createChatInstance(
+  session: SessionContext,
+  initialMessages: NightshiftMessage[],
+  onExplorationData: (data: {
+    status: "running" | "complete" | "error";
+    tool: string | null;
+    elapsed: number;
+  }) => void,
+) {
   return new Chat<NightshiftMessage>({
     id: session.id,
     messages: initialMessages,
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onData: (dataPart) => {
+      if (dataPart.type === "data-exploration") {
+        onExplorationData(
+          dataPart.data as Extract<NightshiftDataTypes, { type: "data-exploration" }>["data"],
+        );
+      }
+    },
   });
 }
 
@@ -35,7 +51,17 @@ export function ChatProvider({
   initialMessages: NightshiftMessage[];
   children: React.ReactNode;
 }) {
-  const [chat] = useState(() => createChatInstance(session, initialMessages));
+  const explorationUpdate = useExplorationStore((s) => s.update);
+  const explorationClear = useExplorationStore((s) => s.clear);
+  const [chat] = useState(() =>
+    createChatInstance(session, initialMessages, (data) => {
+      explorationUpdate(data);
+      // Auto-clear after completion
+      if (data.status === "complete" || data.status === "error") {
+        setTimeout(() => explorationClear(), 3000);
+      }
+    }),
+  );
 
   return <ChatContext.Provider value={{ chat, session }}>{children}</ChatContext.Provider>;
 }

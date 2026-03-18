@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { docs } from "./doc.model";
+import { loopEvents } from "./loop-event.model";
 import { loops } from "./loop.model";
 import { messages } from "./message.model";
 import { repos } from "./repo.model";
@@ -37,10 +38,16 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
 }));
 
 // Loops
-export const loopsRelations = relations(loops, ({ one }) => ({
+export const loopsRelations = relations(loops, ({ one, many }) => ({
   session: one(sessions, { fields: [loops.sessionId], references: [sessions.id] }),
   repo: one(repos, { fields: [loops.repoId], references: [repos.id] }),
   task: one(tasks, { fields: [loops.taskId], references: [tasks.id] }),
+  events: many(loopEvents),
+}));
+
+// Loop Events
+export const loopEventsRelations = relations(loopEvents, ({ one }) => ({
+  loop: one(loops, { fields: [loopEvents.loopId], references: [loops.id] }),
 }));
 
 // Docs

@@ -3,15 +3,14 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
 const REALTIME_TABLES = [
-  { table: "repos", queryKeyPrefix: "repo" },
-  { table: "sessions", queryKeyPrefix: "session" },
-  { table: "tasks", queryKeyPrefix: "task" },
-  { table: "loops", queryKeyPrefix: "loop" },
-  { table: "messages", queryKeyPrefix: "message" },
-  { table: "docs", queryKeyPrefix: "doc" },
+  { table: "repos", queryKeyPrefix: "repo", debounceMs: 750 },
+  { table: "sessions", queryKeyPrefix: "session", debounceMs: 750 },
+  { table: "tasks", queryKeyPrefix: "task", debounceMs: 750 },
+  { table: "loops", queryKeyPrefix: "loop", debounceMs: 750 },
+  { table: "loop_events", queryKeyPrefix: "loop", debounceMs: 250 },
+  { table: "messages", queryKeyPrefix: "message", debounceMs: 750 },
+  { table: "docs", queryKeyPrefix: "doc", debounceMs: 750 },
 ] as const;
-
-const DEBOUNCE_MS = 750;
 
 export function useRealtimeInvalidation(supabase: SupabaseClient, queryClient: QueryClient) {
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -19,20 +18,21 @@ export function useRealtimeInvalidation(supabase: SupabaseClient, queryClient: Q
   useEffect(() => {
     const channel = supabase.channel("db-changes");
 
-    for (const { table, queryKeyPrefix } of REALTIME_TABLES) {
+    for (const { table, queryKeyPrefix, debounceMs } of REALTIME_TABLES) {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
         () => {
-          const existing = timers.current.get(queryKeyPrefix);
+          const key = `${table}:${queryKeyPrefix}`;
+          const existing = timers.current.get(key);
           if (existing) clearTimeout(existing);
 
           timers.current.set(
-            queryKeyPrefix,
+            key,
             setTimeout(() => {
               queryClient.invalidateQueries({ queryKey: [queryKeyPrefix] });
-              timers.current.delete(queryKeyPrefix);
-            }, DEBOUNCE_MS),
+              timers.current.delete(key);
+            }, debounceMs),
           );
         },
       );

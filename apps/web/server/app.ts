@@ -58,11 +58,6 @@ app.post("/api/chat", async (req, res) => {
     return;
   }
 
-  const lastMessage = messages[messages.length - 1];
-  if (!lastMessage || lastMessage.role !== "user") {
-    res.status(400).json({ error: "Last message must be from user" });
-    return;
-  }
 
   await ActorContext.with(
     { type: "user", properties: { user: authSession.user } },

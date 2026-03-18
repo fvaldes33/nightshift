@@ -39,7 +39,11 @@ export type AllTools = typeof allTools;
 export type SessionUITools = InferUITools<AllTools>;
 
 export type NightshiftDataTypes = UIDataTypes & {
-  // Extend with custom data part types as tools need them
+  exploration: {
+    status: "running" | "complete" | "error";
+    tool: string | null;
+    elapsed: number;
+  };
 };
 
 export type NightshiftMessage = UIMessage<unknown, NightshiftDataTypes, SessionUITools>;

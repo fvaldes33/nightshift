@@ -19,9 +19,11 @@ import {
 } from "@openralph/ui/components/resizable";
 import { MessageSquareIcon } from "lucide-react";
 import { useArtifactStore } from "~/hooks/use-artifact-store";
+import { useExplorationStore } from "~/hooks/use-exploration-store";
 import { ArtifactPanel } from "./artifact-panel";
 import { ChatProvider, type SessionContext, useChatContext } from "./chat-context";
 import { ChatMessage } from "./chat-message";
+import { ExplorationStream } from "./exploration-stream";
 
 interface ChatViewProps {
   session: SessionContext;
@@ -38,8 +40,14 @@ export function ChatView({ session, initialMessages }: ChatViewProps) {
 
 function ChatViewInner() {
   const artifact = useArtifactStore((s) => s.artifact);
+  const clearExploration = useExplorationStore((s) => s.clear);
   const { chat } = useChatContext();
-  const { messages, sendMessage, status, stop } = useChat({ chat });
+  const { messages, sendMessage: rawSendMessage, status, stop } = useChat({ chat });
+
+  const sendMessage = (opts: Parameters<typeof rawSendMessage>[0]) => {
+    clearExploration();
+    rawSendMessage(opts);
+  };
 
   const isGenerating = status === "submitted" || status === "streaming";
 
@@ -54,20 +62,23 @@ function ChatViewInner() {
               icon={<MessageSquareIcon className="size-8" />}
             />
           ) : (
-            messages.map((message, index) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                status={index === messages.length - 1 && isGenerating ? status : "ready"}
-              />
-            ))
+            <>
+              {messages.map((message, index) => (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  status={index === messages.length - 1 && isGenerating ? status : "ready"}
+                />
+              ))}
+              <ExplorationStream />
+            </>
           )}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
 
       <div className="border-border/50 shrink-0 border-t py-4">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full max-w-3xl px-4">
           <PromptInput
             onSubmit={({ text }) => {
               if (!text.trim()) return;

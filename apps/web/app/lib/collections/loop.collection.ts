@@ -26,6 +26,9 @@ export function createLoopCollection(opts: {
         const m = transaction.mutations[0];
         await opts.trpcClient.loop.update.mutate({ id: m.original.id, ...m.changes } as any);
       },
+      onDelete: async ({ transaction }) => {
+        await opts.trpcClient.loop.delete.mutate({ id: transaction.mutations[0].original.id });
+      },
     }),
   );
 }

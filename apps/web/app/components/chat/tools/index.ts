@@ -5,7 +5,7 @@ import type { ToolPart, ToolProps } from "./types";
 
 export type { ToolPart, ToolProps };
 
-export const toolRenderMap = new Map<string, ComponentType<ToolProps>>([
+export const toolRenderMap = new Map<string, ComponentType<any>>([
   ["tool-run_exploration", RunExplorationTool],
   ["tool-start_loop", StartLoopTool],
 ]);

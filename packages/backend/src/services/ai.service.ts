@@ -1,4 +1,4 @@
-import { createAnthropicLLM } from "@openralph/ai/models";
+import { createAnthropicLLM, createGroqLLM } from "@openralph/ai/models";
 import {
   convertToModelMessages,
   createUIMessageStream,
@@ -6,11 +6,12 @@ import {
   streamText,
   type UIMessage,
 } from "ai";
+import { v4 as uuidv4 } from "uuid";
+import { z } from "zod";
 import { AgentContext } from "../lib/context";
+import { allTools } from "../tools/index";
 import { getGitHubToken } from "./account.service";
 import { createMessage } from "./message.service";
-import { allTools } from "../tools/index";
-
 import type { getSession } from "./session.service";
 
 interface StreamChatOptions {
@@ -38,16 +39,18 @@ You have tools to explore the repo, create and manage tasks, and work with code.
     execute: async ({ writer }) => {
       const githubToken = await getGitHubToken({});
 
-      // Persist user message
-      if (lastMessage && lastMessage.role === "user") {
+      // Persist user message (client IDs may be nanoids — only pass if valid UUID)
+      if (lastMessage) {
         try {
+          const idParse = z.uuid().safeParse(lastMessage.id);
           await createMessage({
+            ...(idParse.success ? { id: idParse.data } : {}),
             sessionId: session.id,
-            role: "user",
+            role: lastMessage.role,
             parts: lastMessage.parts,
           });
         } catch (error) {
-          console.error("[ai.service] Failed to save user message:", error);
+          console.error("[ai.service] Failed to save message:", error);
         }
       }
 
@@ -63,9 +66,14 @@ You have tools to explore the repo, create and manage tasks, and work with code.
 
       const modelMessages = await convertToModelMessages(messages);
 
+      const anthropic = createAnthropicLLM();
+      const groq = createGroqLLM();
+      const model =
+        session.provider === "anthropic" ? anthropic(session.model) : groq(session.model);
+
       const result = AgentContext.with({ ...agentState, writer }, () =>
         streamText({
-          model: createAnthropicLLM()("claude-sonnet-4-5"),
+          model,
           system: systemPrompt,
           messages: modelMessages,
           providerOptions: {
@@ -80,11 +88,14 @@ You have tools to explore the repo, create and manage tasks, and work with code.
 
       writer.merge(
         result.toUIMessageStream({
-          generateMessageId: () => crypto.randomUUID(),
+          generateMessageId: () => uuidv4(),
+          originalMessages: messages,
           async onFinish({ messages: assistantMsgs }) {
             for (const msg of assistantMsgs) {
               try {
+                const idParse = z.uuid().safeParse(msg.id);
                 await createMessage({
+                  ...(idParse.success ? { id: idParse.data } : {}),
                   sessionId: session.id,
                   role: "assistant",
                   parts: msg.parts,

@@ -23,6 +23,8 @@ export const sessions = pgTable(
     repoId: uuid("repo_id").references(() => repos.id, { onDelete: "set null" }),
     title: text("title").notNull(),
     mode: sessionModeEnum("mode").notNull().default("chat"),
+    provider: text("provider").notNull().default("anthropic"),
+    model: text("model").notNull().default("claude-sonnet-4-6"),
     status: sessionStatusEnum("status").notNull().default("active"),
     branch: text("branch"),
     worktreePath: text("worktree_path"),

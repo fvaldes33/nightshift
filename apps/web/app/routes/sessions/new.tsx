@@ -1,5 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertSessionSchema } from "@openralph/db/models/index";
+import {
+  ModelSelector,
+  ModelSelectorContent,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorInput,
+  ModelSelectorItem,
+  ModelSelectorList,
+  ModelSelectorLogo,
+  ModelSelectorLogoGroup,
+  ModelSelectorName,
+  ModelSelectorTrigger,
+} from "@openralph/ui/ai/model-selector";
 import { Button } from "@openralph/ui/components/button";
 import {
   Combobox,
@@ -19,8 +32,8 @@ import {
   FormMessage,
 } from "@openralph/ui/components/form";
 import { Input } from "@openralph/ui/components/input";
-import { Loader2Icon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CheckIcon, Loader2Icon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { z } from "zod";
@@ -34,10 +47,12 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-const newSessionSchema = insertSessionSchema.pick({ title: true }).extend({
-  repoFullName: z.string().min(1, "Select a repository"),
-  branch: z.string().optional(),
-});
+const newSessionSchema = insertSessionSchema
+  .pick({ title: true, provider: true, model: true })
+  .extend({
+    repoFullName: z.string().min(1, "Select a repository"),
+    branch: z.string().optional(),
+  });
 
 type NewSessionForm = z.infer<typeof newSessionSchema>;
 
@@ -50,9 +65,52 @@ type RepoOption = {
   isLocal: boolean;
 };
 
+const models = [
+  {
+    chef: "Anthropic",
+    chefSlug: "anthropic",
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    providers: ["anthropic"],
+  },
+  {
+    chef: "Groq",
+    chefSlug: "groq",
+    id: "openai/gpt-oss-120b",
+    name: "GPT-OSS 120B",
+    providers: ["groq"],
+  },
+];
+
 export function meta() {
   return [{ title: "New Session — nightshift" }];
 }
+
+interface ModelItemProps {
+  model: (typeof models)[0];
+  selectedModel: string;
+  onSelect: (id: string) => void;
+}
+
+const ModelItem = memo(({ model, selectedModel, onSelect }: ModelItemProps) => {
+  const handleSelect = useCallback(() => onSelect(model.id), [onSelect, model.id]);
+  return (
+    <ModelSelectorItem key={model.id} onSelect={handleSelect} value={model.id}>
+      <ModelSelectorLogo provider={model.chefSlug} />
+      <ModelSelectorName>{model.name}</ModelSelectorName>
+      <ModelSelectorLogoGroup>
+        {model.providers.map((provider) => (
+          <ModelSelectorLogo key={provider} provider={provider} />
+        ))}
+      </ModelSelectorLogoGroup>
+      {selectedModel === model.id ? (
+        <CheckIcon className="ml-auto size-4" />
+      ) : (
+        <div className="ml-auto size-4" />
+      )}
+    </ModelSelectorItem>
+  );
+});
 
 export default function NewSession() {
   const { data: repos } = useRepos();
@@ -60,6 +118,7 @@ export default function NewSession() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [branchTouched, setBranchTouched] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
 
   const createRepo = trpc.repo.create.useMutation();
   const createSession = trpc.session.create.useMutation();
@@ -68,6 +127,8 @@ export default function NewSession() {
     resolver: zodResolver(newSessionSchema),
     defaultValues: {
       title: "",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
       repoFullName: "",
       branch: "",
     },
@@ -128,6 +189,8 @@ export default function NewSession() {
         repoId: repo.id,
         title: values.title,
         mode: "plan",
+        provider: values.provider,
+        model: values.model,
         branch: values.branch || null,
       });
 
@@ -218,12 +281,64 @@ export default function NewSession() {
                     }}
                   />
                 </FormControl>
-                <FormDescription>
-                  Auto-generated from title. Edit to override.
-                </FormDescription>
+                <FormDescription>Auto-generated from title. Edit to override.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
+          />
+
+          <FormField
+            control={form.control}
+            name="model"
+            render={({ field }) => {
+              const selected = models.find((m) => m.id === field.value);
+              const chefs = [...new Set(models.map((m) => m.chef))];
+              return (
+                <FormItem>
+                  <FormLabel>Model</FormLabel>
+                  <FormControl>
+                    <ModelSelector open={modelOpen} onOpenChange={setModelOpen}>
+                      <ModelSelectorTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start gap-2">
+                          {selected && <ModelSelectorLogo provider={selected.chefSlug} />}
+                          <ModelSelectorName>
+                            {selected?.name ?? "Select model"}
+                          </ModelSelectorName>
+                        </Button>
+                      </ModelSelectorTrigger>
+                      <ModelSelectorContent>
+                        <ModelSelectorInput placeholder="Search models..." />
+                        <ModelSelectorList>
+                          <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
+                          {chefs.map((chef) => (
+                            <ModelSelectorGroup heading={chef} key={chef}>
+                              {models
+                                .filter((m) => m.chef === chef)
+                                .map((m) => (
+                                  <ModelItem
+                                    key={m.id}
+                                    model={m}
+                                    selectedModel={field.value ?? ""}
+                                    onSelect={(id) => {
+                                      const model = models.find((x) => x.id === id);
+                                      if (model) {
+                                        field.onChange(id);
+                                        form.setValue("provider", model.providers[0]);
+                                      }
+                                      setModelOpen(false);
+                                    }}
+                                  />
+                                ))}
+                            </ModelSelectorGroup>
+                          ))}
+                        </ModelSelectorList>
+                      </ModelSelectorContent>
+                    </ModelSelector>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <Button type="submit" disabled={submitting} className="gap-2">

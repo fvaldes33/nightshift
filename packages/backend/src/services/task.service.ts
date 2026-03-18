@@ -1,5 +1,5 @@
 import { db } from "@openralph/db/config/database";
-import { and, eq, inArray, isNull } from "@openralph/db/drizzle";
+import { and, eq, ilike, inArray, isNull } from "@openralph/db/drizzle";
 import {
   insertTaskSchema,
   taskStatusEnum,
@@ -23,7 +23,7 @@ export const listTasks = fn(
       where: and(
         repoId ? eq(tasks.repoId, repoId) : undefined,
         status ? eq(tasks.status, status as (typeof tasks.status.enumValues)[number]) : undefined,
-        assignee ? eq(tasks.assignee, assignee) : undefined,
+        assignee ? ilike(tasks.assignee, assignee) : undefined,
         parentId !== undefined
           ? parentId === null
             ? isNull(tasks.parentId)

@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { ralphLoopQueue } from "../jobs/ralph.job";
 import { protectedProcedure, router } from "../lib/trpc";
 import {
   createLoop,
   deleteLoop,
   getLoop,
+  listLoopEvents,
   listLoops,
   updateLoop,
 } from "../services/loop.service";
@@ -15,6 +15,10 @@ export const loopRouter = router({
   create: protectedProcedure.input(createLoop.schema).mutation(({ input }) => createLoop(input)),
   update: protectedProcedure.input(updateLoop.schema).mutation(({ input }) => updateLoop(input)),
   delete: protectedProcedure.input(deleteLoop.schema).mutation(({ input }) => deleteLoop(input)),
+
+  events: protectedProcedure
+    .input(listLoopEvents.schema)
+    .query(({ input }) => listLoopEvents(input)),
 
   /** Create a loop and immediately queue it for processing. */
   start: protectedProcedure
@@ -36,7 +40,7 @@ export const loopRouter = router({
     )
     .mutation(async ({ input }) => {
       const loop = await createLoop({ ...input, prompt: "" });
-      await ralphLoopQueue.send({ loopId: loop.id });
+      // await ralphLoopQueue.send({ loopId: loop.id });
       return loop;
     }),
 });

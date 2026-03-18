@@ -10,8 +10,8 @@ let perplexityInstance: ReturnType<typeof createPerplexity> | null = null;
 
 export function createAnthropicLLM() {
   if (anthropicInstance) return anthropicInstance;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY environment variable");
+  const apiKey = process.env.ANTHROPIC_API_KEY_LOCAL;
+  if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY_LOCAL environment variable");
   anthropicInstance = createAnthropic({ apiKey });
   return anthropicInstance;
 }

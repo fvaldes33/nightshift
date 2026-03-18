@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { runClaude } from "../lib/claude-runner";
 import { createQueue } from "../lib/queue-builder";
-import { getLoop, updateLoop } from "../services/loop.service";
+import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
 import { createMessage } from "../services/message.service";
 import { assembleRalphPrompt } from "../services/prompt.service";
 
@@ -12,7 +12,8 @@ import { assembleRalphPrompt } from "../services/prompt.service";
 // Helpers
 // ---------------------------------------------------------------------------
 
-const BASE_DIR = process.env.NIGHTSHIFT_WORKSPACE_DIR ?? join(process.env.HOME ?? "", ".nightshift");
+const BASE_DIR =
+  process.env.NIGHTSHIFT_WORKSPACE_DIR ?? join(process.env.HOME ?? "", ".nightshift");
 const MCP_CONFIG_PATH = join(BASE_DIR, "mcp-config.json");
 
 /** Write the MCP config once to a persistent location. Reuses if already present. */
@@ -41,74 +42,6 @@ async function ensureMcpConfig(): Promise<string> {
   await writeFile(MCP_CONFIG_PATH, JSON.stringify(config, null, 2));
   console.log(`[ralph] Wrote MCP config to ${MCP_CONFIG_PATH}`);
   return MCP_CONFIG_PATH;
-}
-
-/** Spawn `claude -p` with prompt piped via stdin */
-function runClaude(opts: {
-  prompt: string;
-  mcpConfig: string;
-  cwd: string;
-}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve, reject) => {
-    const allowedTools = [
-      "Read",
-      "Edit",
-      "Write",
-      "Bash",
-      "Glob",
-      "Grep",
-      "mcp__openralph__list_tasks",
-      "mcp__openralph__get_task",
-      "mcp__openralph__update_task",
-      "mcp__openralph__add_task_comment",
-      "mcp__openralph__create_message",
-      "mcp__openralph__get_loop",
-      "mcp__openralph__update_loop",
-      "mcp__openralph__list_docs",
-      "mcp__openralph__get_doc",
-    ].join(",");
-
-    const args = [
-      "-p",
-      "-",
-      "--mcp-config",
-      opts.mcpConfig,
-      "--allowedTools",
-      allowedTools,
-      "--output-format",
-      "json",
-    ];
-
-    console.log(`[ralph] Spawning: claude ${args.join(" ")}`);
-
-    const child = spawn("claude", args, {
-      cwd: opts.cwd,
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env },
-    });
-
-    // Pipe prompt via stdin
-    child.stdin.write(opts.prompt);
-    child.stdin.end();
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-    child.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    child.on("error", (err) => {
-      console.error(`[ralph] Spawn error:`, err);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      resolve({ stdout, stderr, exitCode: code ?? 1 });
-    });
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -169,44 +102,62 @@ ralphIterationQueue.work(async (job) => {
     const mcpConfig = await ensureMcpConfig();
 
     // Assemble prompt from global docs + repo docs
-    const prompt = loop.repoId
-      ? await assembleRalphPrompt(loop.repoId)
-      : loop.prompt;
+    const prompt = loop.repoId ? await assembleRalphPrompt(loop.repoId) : loop.prompt;
 
     console.log(`[ralph] Prompt length: ${prompt.length} chars`);
-    console.log(`[ralph] Prompt preview:\n${prompt.slice(0, 500)}`);
     console.log(`[ralph] cwd: ${cwd}`);
-    console.log(`[ralph] MCP config: ${mcpConfig}`);
 
-    const { stdout, stderr, exitCode } = await runClaude({
+    const allowedTools = [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash",
+      "Glob",
+      "Grep",
+      "mcp__openralph__list_tasks",
+      "mcp__openralph__get_task",
+      "mcp__openralph__update_task",
+      "mcp__openralph__add_task_comment",
+      "mcp__openralph__create_message",
+      "mcp__openralph__get_loop",
+      "mcp__openralph__update_loop",
+      "mcp__openralph__list_docs",
+      "mcp__openralph__get_doc",
+    ].join(",");
+
+    let seq = 0;
+
+    const result = await runClaude({
       prompt,
-      mcpConfig,
       cwd,
+      timeoutSec: 900, // 15 min per iteration
+      args: ["--mcp-config", mcpConfig, "--allowedTools", allowedTools, "--max-turns", "50"],
+      onEvent: (event) => {
+        const currentSeq = seq++;
+        // Fire-and-forget: don't block the stream on DB writes
+        insertLoopEvent(loopId, iteration, currentSeq, event).catch((err) =>
+          console.error(`[ralph] Failed to insert loop event:`, err),
+        );
+
+        if (event.type === "tool_call") {
+          console.log(`[ralph] [iter ${iteration + 1}] Tool: ${event.name}`);
+        } else if (event.type === "assistant") {
+          console.log(`[ralph] [iter ${iteration + 1}] Response: ${event.text.slice(0, 200)}`);
+        }
+      },
+      onLog: (line) => console.log(`[ralph] [iter ${iteration + 1}] ${line}`),
     });
 
-    console.log(`[ralph] Exit code: ${exitCode}`);
-    console.log(`[ralph] stdout length: ${stdout.length}`);
-    if (stdout.length < 2000) {
-      console.log(`[ralph] stdout:\n${stdout}`);
-    } else {
-      console.log(`[ralph] stdout (first 1000):\n${stdout.slice(0, 1000)}`);
-    }
-
-    if (stderr) {
-      console.error(`[ralph] stderr (iteration ${iteration + 1}):`, stderr);
+    console.log(`[ralph] Exit code: ${result.exitCode}`);
+    if (result.usage) {
+      console.log(
+        `[ralph] Tokens: ${result.usage.inputTokens} in / ${result.usage.outputTokens} out` +
+          (result.costUsd != null ? ` ($${result.costUsd.toFixed(4)})` : ""),
+      );
     }
 
     // Update iteration count
     await updateLoop({ id: loopId, currentIteration: iteration + 1 });
-
-    // Parse Claude's JSON output
-    let resultText = stdout;
-    try {
-      const parsed = JSON.parse(stdout);
-      resultText = parsed.result ?? stdout;
-    } catch {
-      // stdout wasn't valid JSON — use raw text
-    }
 
     // Write iteration result as a message to the session
     if (loop.sessionId) {
@@ -214,13 +165,13 @@ ralphIterationQueue.work(async (job) => {
         sessionId: loop.sessionId,
         role: "assistant",
         name: "ralph",
-        parts: [{ type: "text", text: resultText }],
+        parts: [{ type: "text", text: result.summary || "(no output)" }],
       });
     }
 
-    // If Claude exited with non-zero, fail this iteration (pgboss may retry)
-    if (exitCode !== 0) {
-      throw new Error(`Claude exited with code ${exitCode}`);
+    // If Claude errored, fail this iteration (pgboss may retry)
+    if (result.error) {
+      throw new Error(result.error);
     }
 
     // Queue next iteration or mark complete
