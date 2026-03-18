@@ -1,10 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createCaller } from "@openralph/backend/lib/caller";
 import type { RepoListItem } from "@openralph/backend/types/repo.types";
-import type { TaskListItem } from "@openralph/backend/types/task.types";
 import { insertTaskSchema, taskStatusEnum } from "@openralph/db/models/task.model";
 import { Button } from "@openralph/ui/components/button";
-import { Checkbox } from "@openralph/ui/components/checkbox";
 import {
   Combobox,
   ComboboxContent,
@@ -37,51 +35,17 @@ import {
   SelectValue,
 } from "@openralph/ui/components/select";
 import { Textarea } from "@openralph/ui/components/textarea";
-import {
-  type ColumnDef,
-  type RowSelectionState,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
 import { ListTodoIcon, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLoaderData, useNavigate, useRevalidator } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import { z } from "zod";
-import { DataTable } from "~/components/data-table";
-import { DataTableBulkActionToolbar } from "~/components/data-table-bulk-toolbar";
 import { ListFilterMenu } from "~/components/list-filter-menu";
-import { TaskBulkCmdk } from "~/components/task-bulk-cmdk";
-import { statusConfig, taskColumns } from "~/components/task-columns";
+import { statusConfig } from "~/components/task-columns";
+import { TaskTable } from "~/components/task-table";
 import { useTableParams } from "~/hooks/use-table-params";
 import { trpc } from "~/lib/trpc-react";
 import type { Route } from "./+types/index";
-
-// ── Columns (extend shared columns with checkbox) ────────────────────────────
-
-const selectColumn: ColumnDef<TaskListItem> = {
-  id: "select",
-  header: ({ table }) => (
-    <Checkbox
-      checked={
-        table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")
-      }
-      onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-      onClick={(e) => e.stopPropagation()}
-    />
-  ),
-  cell: ({ row }) => (
-    <Checkbox
-      checked={row.getIsSelected()}
-      onCheckedChange={(v) => row.toggleSelected(!!v)}
-      onClick={(e) => e.stopPropagation()}
-    />
-  ),
-  enableSorting: false,
-};
-
-const columns: ColumnDef<TaskListItem>[] = [selectColumn, ...taskColumns];
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -117,14 +81,11 @@ export function meta() {
 
 export default function Tasks() {
   const { tasks: initialTasks, repos } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { filters, setFilter } = useTableParams({
     filterKeys: ["status", "assignee"] as const,
   });
-
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const { data } = trpc.task.list.useQuery(
     {
@@ -135,17 +96,6 @@ export default function Tasks() {
   );
 
   const tasks = data ?? initialTasks;
-
-  const table = useReactTable({
-    data: tasks,
-    columns,
-    getRowId: (row) => row.id,
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    state: { rowSelection },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
 
   const hasFilters = filters.status || filters.assignee;
   const isEmpty = tasks.length === 0 && !hasFilters;
@@ -214,12 +164,8 @@ export default function Tasks() {
           </span>
         </div>
 
-        <DataTable table={table} onRowClick={(task) => navigate(`/tasks/${task.id}`)} />
+        <TaskTable tasks={tasks} />
       </div>
-
-      <DataTableBulkActionToolbar table={table}>
-        <TaskBulkCmdk table={table} />
-      </DataTableBulkActionToolbar>
 
       <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} />
     </>

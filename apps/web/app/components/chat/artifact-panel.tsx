@@ -19,7 +19,7 @@ export function ArtifactPanel() {
           <XIcon className="size-4" />
         </button>
       </div>
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-6">
         <MarkdownContent>{artifact.content}</MarkdownContent>
       </div>
     </div>

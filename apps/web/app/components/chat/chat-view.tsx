@@ -17,25 +17,29 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@openralph/ui/components/resizable";
-import { DefaultChatTransport } from "ai";
 import { MessageSquareIcon } from "lucide-react";
 import { useArtifactStore } from "~/hooks/use-artifact-store";
 import { ArtifactPanel } from "./artifact-panel";
+import { ChatProvider, type SessionContext, useChatContext } from "./chat-context";
 import { ChatMessage } from "./chat-message";
 
 interface ChatViewProps {
-  sessionId: string;
+  session: SessionContext;
   initialMessages: NightshiftMessage[];
 }
 
-export function ChatView({ sessionId, initialMessages }: ChatViewProps) {
-  const artifact = useArtifactStore((s) => s.artifact);
+export function ChatView({ session, initialMessages }: ChatViewProps) {
+  return (
+    <ChatProvider session={session} initialMessages={initialMessages}>
+      <ChatViewInner />
+    </ChatProvider>
+  );
+}
 
-  const { messages, sendMessage, status, stop } = useChat<NightshiftMessage>({
-    id: sessionId,
-    messages: initialMessages,
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-  });
+function ChatViewInner() {
+  const artifact = useArtifactStore((s) => s.artifact);
+  const { chat } = useChatContext();
+  const { messages, sendMessage, status, stop } = useChat({ chat });
 
   const isGenerating = status === "submitted" || status === "streaming";
 
@@ -81,17 +85,19 @@ export function ChatView({ sessionId, initialMessages }: ChatViewProps) {
     </div>
   );
 
-  if (!artifact) return chatPanel;
-
   return (
     <ResizablePanelGroup orientation="horizontal" className="size-full">
-      <ResizablePanel defaultSize={50} minSize={30}>
+      <ResizablePanel defaultSize={artifact ? 50 : 100} minSize={30}>
         {chatPanel}
       </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={50} minSize={25}>
-        <ArtifactPanel />
-      </ResizablePanel>
+      {!artifact || (
+        <>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={50} minSize={25}>
+            <ArtifactPanel />
+          </ResizablePanel>
+        </>
+      )}
     </ResizablePanelGroup>
   );
 }

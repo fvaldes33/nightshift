@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@openralph/ui/components/sidebar";
-import { ListTodoIcon } from "lucide-react";
+import { ListTodoIcon, NotebookTextIcon } from "lucide-react";
 import { Link, Outlet, redirect, useLoaderData } from "react-router";
 import { LoopNav } from "~/components/loop-nav";
 import { RepoNav } from "~/components/repo-nav";
@@ -65,6 +65,14 @@ export default function AppLayout() {
                     <Link to="/tasks">
                       <ListTodoIcon className="size-3.5" />
                       <span>Tasks</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild size="sm">
+                    <Link to="/docs">
+                      <NotebookTextIcon className="size-3.5" />
+                      <span>Docs</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

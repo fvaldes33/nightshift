@@ -12,20 +12,19 @@ import {
 import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import { Progress } from "@openralph/ui/components/progress";
-import { getCoreRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table";
 import {
   ArrowLeftIcon,
   CirclePlayIcon,
   FolderTreeIcon,
   ListChecksIcon,
   MessageSquareIcon,
+  NotebookTextIcon,
   RepeatIcon,
   TrashIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useLoaderData, useNavigate } from "react-router";
-import { DataTable } from "~/components/data-table";
-import { taskColumns } from "~/components/task-columns";
+import { TaskTable } from "~/components/task-table";
 import { trpc } from "~/lib/trpc-react";
 import type { Route } from "./+types/repo";
 
@@ -33,13 +32,14 @@ import type { Route } from "./+types/repo";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const caller = createCaller(request);
-  const [repo, sessions, tasks, loops] = await Promise.all([
+  const [repo, sessions, tasks, loops, docs] = await Promise.all([
     caller.repo.get({ id: params.repoId }),
     caller.session.list({ repoId: params.repoId }),
     caller.task.list({ repoId: params.repoId }),
     caller.loop.list({ repoId: params.repoId }),
+    caller.doc.list({ repoId: params.repoId }),
   ]);
-  return { repo, sessions, tasks, loops };
+  return { repo, sessions, tasks, loops, docs };
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -51,7 +51,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function RepoDetail() {
-  const { repo, sessions, tasks, loops } = useLoaderData<typeof loader>();
+  const { repo, sessions, tasks, loops, docs } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -66,13 +66,6 @@ export default function RepoDetail() {
   const activeLoops = loops.filter(
     (l) => l.status === "running" || l.status === "queued",
   );
-
-  const table = useReactTable({
-    data: tasks,
-    columns: taskColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
 
   return (
     <div className="flex flex-col gap-6 overflow-auto p-6">
@@ -103,7 +96,7 @@ export default function RepoDetail() {
       </h1>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3">
           <FolderTreeIcon className="size-4 text-muted-foreground shrink-0" />
           <div className="flex flex-col">
@@ -125,6 +118,16 @@ export default function RepoDetail() {
             <span className="text-xs text-muted-foreground">Active Loops</span>
           </div>
         </div>
+        <Link
+          to={`/repos/${repo.id}/docs`}
+          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
+        >
+          <NotebookTextIcon className="size-4 text-muted-foreground shrink-0" />
+          <div className="flex flex-col">
+            <span className="text-lg font-semibold tabular-nums">{docs.length}</span>
+            <span className="text-xs text-muted-foreground">Docs</span>
+          </div>
+        </Link>
       </div>
 
       {/* Recent Sessions */}
@@ -167,10 +170,7 @@ export default function RepoDetail() {
           <p className="text-sm text-muted-foreground">No tasks yet.</p>
         ) : (
           <div className="rounded-lg border border-border/50">
-            <DataTable
-              table={table}
-              onRowClick={(row) => navigate(`/tasks/${row.id}`)}
-            />
+            <TaskTable tasks={tasks} />
           </div>
         )}
       </section>

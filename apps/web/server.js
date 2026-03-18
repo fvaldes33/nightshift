@@ -96,7 +96,7 @@ if (DEVELOPMENT) {
   });
 }
 
-const desiredPort = Number(process.env.PORT || 3000);
+const desiredPort = Number(process.env.PORT || 56677);
 const portToUse = await getPort({
   port: portNumbers(desiredPort, desiredPort + 100),
 });

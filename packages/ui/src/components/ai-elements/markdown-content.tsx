@@ -8,16 +8,26 @@ import { cn } from "../../lib/utils";
 
 const plugins = { cjk, code, math, mermaid };
 
-export type MarkdownContentProps = ComponentProps<"div"> & {
-  children: string;
-};
+export type StreamdownProps = ComponentProps<typeof Streamdown>;
 
-export function MarkdownContent({ className, children, ...props }: MarkdownContentProps) {
+export type MarkdownContentProps = ComponentProps<"div"> &
+  StreamdownProps & {
+    children?: string;
+  };
+
+export function MarkdownContent({ className, ...props }: MarkdownContentProps) {
   return (
-    <div className={cn("prose prose-sm dark:prose-invert max-w-none", className)} {...props}>
-      <Streamdown className="grid gap-2" plugins={plugins}>
-        {children}
-      </Streamdown>
-    </div>
+    <Streamdown
+      className={cn(
+        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:max-w-full [&_pre]:overflow-x-auto",
+        // bulleted lists should have some margin-left
+        "[&_ol]:ml-5 [&_ul]:ml-4",
+        // ordered list should show numbers
+        "[&_ol]:list-decimal [&_ul]:list-disc",
+        className,
+      )}
+      plugins={plugins}
+      {...props}
+    />
   );
 }

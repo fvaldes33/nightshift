@@ -15,7 +15,7 @@ export const auth = betterAuth({
       scope: ["repo", "read:org"],
     },
   },
-  trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:3000"],
+  trustedOrigins: [process.env.BETTER_AUTH_URL ?? "http://localhost:56677"],
   databaseHooks: {
     user: {
       create: {

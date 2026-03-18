@@ -103,7 +103,15 @@ export default function Session() {
 
       {/* Content */}
       {session.workspaceStatus === "ready" ? (
-        <ChatView sessionId={session.id} initialMessages={initialMessages} />
+        <ChatView
+          session={{
+            id: session.id,
+            repoId: session.repoId,
+            branch: session.branch,
+            worktreePath: session.worktreePath,
+          }}
+          initialMessages={initialMessages}
+        />
       ) : (
         <div className="flex flex-1 items-center justify-center p-6">
           <WorkspaceStatusIndicator

@@ -15,21 +15,21 @@ A personal AI assistant infrastructure for running autonomous coding loops (call
 
 ## Architecture
 
-Single Render.com web service running:
-- React Router 7 (SSR) + shadcn UI
-- Express server
-- pgboss queue (backed by Postgres)
-- Ralph job executor
-- BetterAuth for auth (not Supabase Auth)
-- Postgres on Neon or Supabase (just the DB)
+Runs locally on your dev machine. Exposed to the internet via Tailscale (mesh VPN — works from anywhere, not just LAN).
+
+- Express + React Router 7 (SSR) + shadcn UI
+- pgboss queue (backed by Postgres on Neon)
+- Ralph job executor (spawns `claude -p` CLI)
+- BetterAuth for auth
+- Tailscale for remote access (`your-machine.tailnet.ts.net:3000`)
 
 ```
 ┌─────────────────────────────────────┐
-│  Render.com Web Service (Docker)    │
+│  Local machine                      │
 │                                     │
 │  Express + React Router 7 (SSR)     │
 │  ├─ pgboss worker (queue consumer)  │
-│  ├─ ralph executor                  │
+│  ├─ ralph executor (claude -p CLI)  │
 │  ├─ model router (claude / groq)    │
 │  ├─ GitHub ops (gh CLI / API)       │
 │  ├─ BetterAuth                      │
@@ -48,33 +48,9 @@ Single Render.com web service running:
        Slack webhooks for notifications
 ```
 
-## The Claude Max auth question
+## Claude Max auth
 
-This is the make-or-break decision. Claude Code Max subscription uses OAuth-based auth designed for interactive local use. Running it on Render means figuring out headless auth.
-
-### Options discovered
-
-1. **CLIProxyAPI** — Community tool that wraps Max subscription OAuth token as an OpenAI-compatible API (`localhost:8317/v1/chat/completions`). Runs as a sidecar process inside the same container. Internal port — doesn't need to be exposed by Render. Do the OAuth flow once via `cli-proxy-api --claude-login --no-browser`, it stores the token. Your app just makes HTTP calls to it.
-
-2. **Direct Claude CLI on Render (Docker)** — Install `claude` in the Dockerfile, do OAuth flow once via Render shell. Problem: tokens expire (~8 hours), container restarts lose auth. Would need persistent disk or token stored in DB + restore on startup.
-
-3. **Community fork for token refresh** — github.com/grll/claude-code-action handles automatic OAuth token refresh, but built for GitHub Actions. Could potentially be adapted.
-
-4. **Just use ANTHROPIC_API_KEY** — Simplest. Pay per-token instead of using Max. Offset costs by routing cheaper tasks to Groq aggressively.
-
-5. **Claude Code SDK** — The `@anthropic-ai/claude-code` npm package supports headless mode with `-p` flag. With Max subscription auth (no API key set), headless execution is included in the subscription. Key: `ANTHROPIC_API_KEY` must NOT be set, otherwise it falls back to API billing.
-
-### Most promising path
-
-CLIProxyAPI as a sidecar on Render. It gives:
-- Max subscription billing (no per-token cost)
-- OpenAI-compatible API format (same interface as Groq — easy model routing)
-- Runs inside the container on a different port (no Render config needed)
-- Token persistence is still a concern on container restarts
-
-### Fallback
-
-Use `ANTHROPIC_API_KEY` + lean heavily on Groq for anything that doesn't need Claude-level reasoning. Zero auth complexity.
+Running locally eliminates the auth problem entirely. Claude CLI is already authenticated via Max subscription on the local machine. `claude -p` just works — no token management, no sidecar, no expiry concerns. `ANTHROPIC_API_KEY` is not set so all CLI usage goes through the Max subscription.
 
 ## Model router concept
 
@@ -121,5 +97,5 @@ Still need to add: `packages/db` (drizzle models, pgboss), `packages/backend` (t
 - **Database:** PostgreSQL (Neon) + Drizzle ORM
 - **Queue:** pgboss
 - **AI:** Vercel AI SDK v6, @ai-sdk/anthropic v3, @ai-sdk/groq v3
-- **Hosting:** Render.com (Docker)
+- **Hosting:** Local machine, exposed via Tailscale
 - **Notifications:** Slack webhooks
