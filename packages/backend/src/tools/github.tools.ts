@@ -1,7 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { execSync } from "node:child_process";
 import { AgentContext } from "../lib/context";
+import {
+  ghClone,
+  gitCurrentBranch,
+  gitPush,
+  gitWorktreeAdd,
+  gitWorktreeRemove,
+} from "../services/git-cli.service";
 import {
   addPRLabels,
   addPRReviewers,
@@ -37,9 +43,7 @@ export const clone_repo = tool({
   }),
   execute: async ({ destination }) => {
     const { owner, repo } = getRepoInfo();
-    execSync(`gh repo clone ${owner}/${repo} ${destination}`, {
-      stdio: "pipe",
-    });
+    ghClone(owner, repo, destination);
     return { path: destination, repo: `${owner}/${repo}` };
   },
 });
@@ -53,10 +57,7 @@ export const create_worktree = tool({
   }),
   execute: async ({ branch, worktreePath }) => {
     const repoDir = getWorktreePath();
-    execSync(`git worktree add -b ${branch} ${worktreePath}`, {
-      cwd: repoDir,
-      stdio: "pipe",
-    });
+    gitWorktreeAdd({ repoDir, worktreePath, branch, createBranch: true });
     return { worktreePath, branch };
   },
 });
@@ -68,10 +69,7 @@ export const delete_worktree = tool({
   }),
   execute: async ({ worktreePath }) => {
     const repoDir = getWorktreePath();
-    execSync(`git worktree remove ${worktreePath} --force`, {
-      cwd: repoDir,
-      stdio: "pipe",
-    });
+    gitWorktreeRemove({ repoDir, worktreePath });
     return { removed: worktreePath };
   },
 });
@@ -80,16 +78,9 @@ export const push_branch = tool({
   description: "Push the current branch to the remote. Needed before creating a PR.",
   inputSchema: z.object({}),
   execute: async () => {
-    const repoDir = getWorktreePath();
-    execSync("git push -u origin HEAD", {
-      cwd: repoDir,
-      stdio: "pipe",
-    });
-    const branch = execSync("git branch --show-current", {
-      cwd: repoDir,
-      stdio: "pipe",
-      encoding: "utf-8",
-    }).trim();
+    const cwd = getWorktreePath();
+    gitPush(cwd);
+    const branch = gitCurrentBranch(cwd);
     return { branch, pushed: true };
   },
 });

@@ -15,14 +15,6 @@ import {
 } from "@openralph/ui/ai/model-selector";
 import { Button } from "@openralph/ui/components/button";
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@openralph/ui/components/combobox";
-import {
   Form,
   FormControl,
   FormDescription,
@@ -33,11 +25,10 @@ import {
 } from "@openralph/ui/components/form";
 import { Input } from "@openralph/ui/components/input";
 import { CheckIcon, Loader2Icon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
-import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 function slugify(text: string): string {
@@ -50,20 +41,10 @@ function slugify(text: string): string {
 const newSessionSchema = insertSessionSchema
   .pick({ title: true, provider: true, model: true })
   .extend({
-    repoFullName: z.string().min(1, "Select a repository"),
     branch: z.string().optional(),
   });
 
 type NewSessionForm = z.infer<typeof newSessionSchema>;
-
-type RepoOption = {
-  fullName: string;
-  owner: string;
-  name: string;
-  defaultBranch: string;
-  cloneUrl: string | null;
-  isLocal: boolean;
-};
 
 const models = [
   {
@@ -113,14 +94,13 @@ const ModelItem = memo(({ model, selectedModel, onSelect }: ModelItemProps) => {
 });
 
 export default function NewSession() {
-  const { data: repos } = useRepos();
-  const { data: githubRepos = [] } = trpc.repo.listGitHub.useQuery({});
+  const params = useParams();
+  const repoId = params.repoId!;
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [branchTouched, setBranchTouched] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
 
-  const createRepo = trpc.repo.create.useMutation();
   const createSession = trpc.session.create.useMutation();
 
   const form = useForm<NewSessionForm>({
@@ -129,7 +109,6 @@ export default function NewSession() {
       title: "",
       provider: "anthropic",
       model: "claude-sonnet-4-6",
-      repoFullName: "",
       branch: "",
     },
   });
@@ -145,48 +124,11 @@ export default function NewSession() {
     }
   }, [title, branchTouched, form]);
 
-  // Merge local + GitHub repos, deduped
-  const repoOptions = useMemo<RepoOption[]>(() => {
-    const local: RepoOption[] = repos.map((r) => ({
-      fullName: `${r.owner}/${r.name}`,
-      owner: r.owner,
-      name: r.name,
-      defaultBranch: r.defaultBranch,
-      cloneUrl: r.cloneUrl,
-      isLocal: true,
-    }));
-    const remote: RepoOption[] = githubRepos
-      .filter((gr) => !repos.some((r) => r.owner === gr.owner && r.name === gr.name))
-      .map((r) => ({
-        fullName: r.fullName,
-        owner: r.owner,
-        name: r.name,
-        defaultBranch: r.defaultBranch,
-        cloneUrl: r.cloneUrl,
-        isLocal: false,
-      }));
-    return [...local, ...remote];
-  }, [repos, githubRepos]);
-
   async function onSubmit(values: NewSessionForm) {
     setSubmitting(true);
     try {
-      const selected = repoOptions.find((r) => r.fullName === values.repoFullName);
-      let repo = repos.find((r) => `${r.owner}/${r.name}` === values.repoFullName);
-
-      if (!repo && selected) {
-        repo = await createRepo.mutateAsync({
-          owner: selected.owner,
-          name: selected.name,
-          defaultBranch: selected.defaultBranch,
-          cloneUrl: selected.cloneUrl,
-        });
-      }
-
-      if (!repo) return;
-
       const session = await createSession.mutateAsync({
-        repoId: repo.id,
+        repoId,
         title: values.title,
         mode: "plan",
         provider: values.provider,
@@ -194,14 +136,11 @@ export default function NewSession() {
         branch: values.branch || null,
       });
 
-      navigate(`/sessions/${session.id}`);
+      navigate(`/repos/${repoId}/sessions/${session.id}`);
     } catch {
       setSubmitting(false);
     }
   }
-
-  const selectedRepoValue = form.watch("repoFullName");
-  const selectedOption = repoOptions.find((r) => r.fullName === selectedRepoValue) ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-6 p-6">
@@ -212,44 +151,6 @@ export default function NewSession() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
-          <FormField
-            control={form.control}
-            name="repoFullName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Repository</FormLabel>
-                <FormControl>
-                  <Combobox
-                    items={repoOptions}
-                    value={selectedOption}
-                    onValueChange={(item: RepoOption | null) => {
-                      field.onChange(item?.fullName ?? "");
-                    }}
-                    itemToStringLabel={(item: RepoOption) => item.fullName}
-                  >
-                    <ComboboxInput
-                      showClear={!!selectedRepoValue}
-                      showTrigger={!selectedRepoValue}
-                      placeholder="Search repos..."
-                      className="font-mono text-sm"
-                    />
-                    <ComboboxContent>
-                      <ComboboxEmpty>No repos found</ComboboxEmpty>
-                      <ComboboxList>
-                        {(item: RepoOption) => (
-                          <ComboboxItem key={item.fullName} value={item}>
-                            <span className="font-mono text-sm">{item.fullName}</span>
-                          </ComboboxItem>
-                        )}
-                      </ComboboxList>
-                    </ComboboxContent>
-                  </Combobox>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
           <FormField
             control={form.control}
             name="title"

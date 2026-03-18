@@ -96,7 +96,7 @@ ralphIterationQueue.work(async (job) => {
     return;
   }
 
-  const cwd = loop.worktree ?? ".";
+  const cwd = loop.worktree ?? loop.repo?.localPath ?? ".";
 
   try {
     const mcpConfig = await ensureMcpConfig();

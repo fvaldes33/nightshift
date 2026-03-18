@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -11,14 +11,14 @@ import {
 } from "react-router";
 import superjson from "superjson";
 
+import { Toaster } from "@openralph/ui/components/sonner";
 import { TooltipProvider } from "@openralph/ui/components/tooltip";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { useRealtimeInvalidation } from "./hooks/use-realtime-invalidation";
-import { NightshiftContext } from "./lib/nightshift-context";
+import { queryClient } from "./lib/query-client";
 import { useSupabaseClient } from "./lib/supabase";
 import { trpc } from "./lib/trpc-react";
-import { createVanillaTRPCClient } from "./lib/trpc-vanilla";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -56,7 +56,6 @@ export function HydrateFallback() {
 }
 
 export default function App() {
-  const [queryClient] = useState(() => new QueryClient());
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
@@ -67,19 +66,15 @@ export default function App() {
       ],
     }),
   );
-  const [vanillaTRPC] = useState(() => createVanillaTRPCClient());
-
-  const nightshiftCtx = useMemo(() => ({ vanillaTRPC }), [vanillaTRPC]);
 
   return (
     <TooltipProvider delayDuration={150}>
-      <NightshiftContext.Provider value={nightshiftCtx}>
-        <trpc.Provider client={trpcClient} queryClient={queryClient}>
-          <QueryClientProvider client={queryClient}>
-            <AppShell />
-          </QueryClientProvider>
-        </trpc.Provider>
-      </NightshiftContext.Provider>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <AppShell />
+          <Toaster />
+        </QueryClientProvider>
+      </trpc.Provider>
     </TooltipProvider>
   );
 }

@@ -1,7 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
-import type { z } from "zod";
+import { z } from "zod";
+
+export const workspaceStatusEnum = pgEnum("workspace_status", [
+  "pending",
+  "cloning",
+  "ready",
+  "failed",
+]);
 
 export const repos = pgTable("repos", {
   id: uuid("id")
@@ -12,6 +19,9 @@ export const repos = pgTable("repos", {
   name: text("name").notNull(),
   defaultBranch: text("default_branch").notNull().default("main"),
   cloneUrl: text("clone_url"),
+  localPath: text("local_path"),
+  workspaceStatus: workspaceStatusEnum("workspace_status").notNull().default("pending"),
+  workspaceError: text("workspace_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -19,10 +29,19 @@ export const repos = pgTable("repos", {
     .$onUpdate(() => new Date()),
 });
 
-export const insertRepoSchema = createInsertSchema(repos);
-export const selectRepoSchema = createSelectSchema(repos);
-export const updateRepoSchema = createUpdateSchema(repos);
+const zWorkspaceStatus = z.enum(workspaceStatusEnum.enumValues);
+
+export const insertRepoSchema = createInsertSchema(repos, {
+  workspaceStatus: zWorkspaceStatus,
+});
+export const selectRepoSchema = createSelectSchema(repos, {
+  workspaceStatus: zWorkspaceStatus,
+});
+export const updateRepoSchema = createUpdateSchema(repos, {
+  workspaceStatus: zWorkspaceStatus.optional(),
+});
 
 export type Repo = typeof repos.$inferSelect;
 export type NewRepo = typeof repos.$inferInsert;
 export type UpdateRepo = z.infer<typeof updateRepoSchema>;
+export type WorkspaceStatus = Repo["workspaceStatus"];

@@ -17,7 +17,8 @@ export function meta() {
 export default function TaskDetail() {
   const params = useParams();
   const navigate = useNavigate();
-  const { collection: taskCollection } = useTasks();
+  const repoId = params.repoId!;
+  const { collection: taskCollection } = useTasks({ repoId });
 
   const { data: task, isLoading } = trpc.task.get.useQuery({ id: params.taskId! });
 
@@ -31,7 +32,7 @@ export default function TaskDetail() {
 
   function handleDelete() {
     taskCollection.delete(task!.id);
-    navigate("/tasks");
+    navigate(`/repos/${repoId}/tasks`);
   }
 
   const comments = (task.comments ?? []) as TaskComment[];
@@ -40,6 +41,7 @@ export default function TaskDetail() {
     <div className="flex h-full flex-col overflow-hidden">
       <TaskHeader
         task={task}
+        repoId={repoId}
         onDelete={handleDelete}
         isDeleting={false}
       />
@@ -54,6 +56,7 @@ export default function TaskDetail() {
             />
             <TaskSubtasks
               taskId={task.id}
+              repoId={repoId}
               subtasks={task.subtasks ?? []}
             />
             <Separator className="bg-border/50" />

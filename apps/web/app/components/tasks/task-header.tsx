@@ -23,24 +23,26 @@ import { Link } from "react-router";
 
 interface TaskHeaderProps {
   task: TaskGetOutput;
+  repoId?: string;
   onDelete: () => void;
   isDeleting?: boolean;
 }
 
-export function TaskHeader({ task, onDelete, isDeleting }: TaskHeaderProps) {
+export function TaskHeader({ task, repoId, onDelete, isDeleting }: TaskHeaderProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const tasksUrl = repoId ? `/repos/${repoId}/tasks` : "/repos";
 
   return (
     <>
       <div className="border-border/50 flex items-center gap-2 border-b px-6 py-3">
         <Button variant="ghost" size="icon" className="size-7" asChild>
-          <Link to="/tasks">
+          <Link to={tasksUrl}>
             <ArrowLeftIcon className="size-3.5" />
           </Link>
         </Button>
 
         <nav className="text-muted-foreground flex items-center gap-1 text-sm">
-          <Link to="/tasks" className="hover:text-foreground transition-colors">
+          <Link to={tasksUrl} className="hover:text-foreground transition-colors">
             Tasks
           </Link>
           <span className="text-muted-foreground/50">/</span>

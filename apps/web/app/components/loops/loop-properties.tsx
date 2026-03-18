@@ -1,5 +1,6 @@
 import type { LoopGetOutput } from "@openralph/backend/types/loop.types";
 import { Badge } from "@openralph/ui/components/badge";
+import { Clipboard } from "@openralph/ui/components/clipboard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@openralph/ui/components/tooltip";
 import {
   CalendarIcon,
@@ -25,7 +26,7 @@ const statusColor: Record<string, string> = {
   failed: "bg-destructive-foreground",
 };
 
-export function LoopProperties({ loop }: { loop: LoopGetOutput }) {
+export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: string }) {
   const filterConfig = loop.filterConfig as
     | { labels?: string[]; assignee?: string }
     | null
@@ -49,37 +50,41 @@ export function LoopProperties({ loop }: { loop: LoopGetOutput }) {
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<GitBranchIcon />} label="Branch">
-        <span className="font-mono text-xs text-muted-foreground">
-          {loop.branch ?? "\u2014"}
-        </span>
+        {loop.branch ? (
+          <Clipboard value={loop.branch} className="font-mono text-xs text-muted-foreground">
+            {loop.branch}
+          </Clipboard>
+        ) : (
+          <span className="text-xs text-muted-foreground">{"\u2014"}</span>
+        )}
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<GitPullRequestIcon />} label="PR">
         {loop.prUrl ? (
-          <a
-            href={loop.prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground hover:underline text-xs"
-          >
-            #{loop.prNumber}
-          </a>
+          <Clipboard value={loop.prUrl} className="text-xs">
+            <a
+              href={loop.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{loop.prNumber}
+            </a>
+          </Clipboard>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>
         )}
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<FolderIcon />} label="Worktree">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="block max-w-[120px] truncate font-mono text-xs text-muted-foreground">
-              {loop.worktree ?? "\u2014"}
-            </span>
-          </TooltipTrigger>
-          {loop.worktree && (
-            <TooltipContent side="bottom">{loop.worktree}</TooltipContent>
-          )}
-        </Tooltip>
+        {loop.worktree ? (
+          <Clipboard value={loop.worktree} className="font-mono text-xs text-muted-foreground">
+            {loop.worktree}
+          </Clipboard>
+        ) : (
+          <span className="text-xs text-muted-foreground">{"\u2014"}</span>
+        )}
       </TaskPropertyRow>
 
       {"task" in loop && loop.task ? (
@@ -87,7 +92,7 @@ export function LoopProperties({ loop }: { loop: LoopGetOutput }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
-                to={`/tasks/${loop.task.id}`}
+                to={`/repos/${repoId}/tasks/${loop.task.id}`}
                 className="text-foreground hover:underline block max-w-[120px] truncate text-xs"
               >
                 {loop.task.title}
@@ -107,7 +112,7 @@ export function LoopProperties({ loop }: { loop: LoopGetOutput }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
-                to={`/sessions/${loop.session.id}`}
+                to={`/repos/${repoId}/sessions/${loop.session.id}`}
                 className="text-foreground hover:underline block max-w-[120px] truncate text-xs"
               >
                 {loop.session.title}

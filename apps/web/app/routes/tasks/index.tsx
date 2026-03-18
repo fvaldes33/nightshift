@@ -1,15 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { RepoListItem } from "@openralph/backend/types/repo.types";
 import { insertTaskSchema, taskStatusEnum } from "@openralph/db/models/task.model";
 import { Button } from "@openralph/ui/components/button";
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@openralph/ui/components/combobox";
 import {
   Dialog,
   DialogContent,
@@ -37,13 +28,14 @@ import { Textarea } from "@openralph/ui/components/textarea";
 import { ListTodoIcon, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { useParams } from "react-router";
 import { z } from "zod";
 import { ListFilterMenu } from "~/components/list-filter-menu";
 import { statusConfig } from "~/components/task-columns";
 import { TaskTable } from "~/components/task-table";
-import { useRepos, useTasks } from "~/hooks/use-collection";
+import { useTasks } from "~/hooks/use-collection";
 import { useTableParams } from "~/hooks/use-table-params";
-import { createTaskCollection } from "~/lib/collections";
+import { taskCollection as taskCollectionSingleton } from "~/lib/collections";
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -52,7 +44,6 @@ const createTaskSchema = insertTaskSchema.pick({
   description: true,
   status: true,
   priority: true,
-  repoId: true,
 });
 
 type CreateTaskForm = z.infer<typeof createTaskSchema>;
@@ -64,6 +55,8 @@ export function meta() {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function Tasks() {
+  const params = useParams();
+  const repoId = params.repoId!;
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const { filters, setFilter } = useTableParams({
@@ -71,10 +64,10 @@ export default function Tasks() {
   });
 
   const { data: tasks, collection: taskCollection } = useTasks({
+    repoId,
     status: filters.status,
     assignee: filters.assignee,
   });
-  const { data: repos } = useRepos();
 
   const hasFilters = filters.status || filters.assignee;
   const isEmpty = tasks.length === 0 && !hasFilters;
@@ -93,7 +86,7 @@ export default function Tasks() {
             New task
           </Button>
         </div>
-        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} taskCollection={taskCollection} />
+        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} taskCollection={taskCollection} />
       </>
     );
   }
@@ -143,10 +136,10 @@ export default function Tasks() {
           </span>
         </div>
 
-        <TaskTable tasks={tasks} />
+        <TaskTable tasks={tasks} repoId={repoId} />
       </div>
 
-      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repos={repos} taskCollection={taskCollection} />
+      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} taskCollection={taskCollection} />
     </>
   );
 }
@@ -163,13 +156,13 @@ const priorityOptions = [
 function CreateTaskDialog({
   open,
   onOpenChange,
-  repos,
+  repoId,
   taskCollection,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  repos: RepoListItem[];
-  taskCollection: ReturnType<typeof createTaskCollection>;
+  repoId: string;
+  taskCollection: typeof taskCollectionSingleton;
 }) {
   const form = useForm<CreateTaskForm>({
     resolver: zodResolver(createTaskSchema),
@@ -178,7 +171,6 @@ function CreateTaskDialog({
       description: undefined,
       status: "backlog",
       priority: 3,
-      repoId: undefined,
     },
   });
 
@@ -186,10 +178,10 @@ function CreateTaskDialog({
     taskCollection.insert({
       id: crypto.randomUUID(),
       ...values,
+      repoId,
       description: values.description?.trim() || null,
       labels: [],
       assignee: null,
-      sessionId: null,
       parentId: null,
       comments: [],
       createdAt: new Date(),
@@ -199,9 +191,6 @@ function CreateTaskDialog({
     onOpenChange(false);
     form.reset();
   }
-
-  const selectedRepoId = form.watch("repoId");
-  const selectedRepo = repos.find((r) => r.id === selectedRepoId) ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -238,46 +227,6 @@ function CreateTaskDialog({
                       {...field}
                       value={field.value ?? ""}
                     />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="repoId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Repository</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      items={repos}
-                      value={selectedRepo}
-                      onValueChange={(item: RepoListItem | null) => {
-                        field.onChange(item?.id ?? undefined);
-                      }}
-                      itemToStringLabel={(item: RepoListItem) => `${item.owner}/${item.name}`}
-                    >
-                      <ComboboxInput
-                        showClear={!!selectedRepoId}
-                        showTrigger={!selectedRepoId}
-                        placeholder="Search repos..."
-                        className="font-mono text-sm"
-                      />
-                      <ComboboxContent>
-                        <ComboboxEmpty>No repos found</ComboboxEmpty>
-                        <ComboboxList>
-                          {(item: RepoListItem) => (
-                            <ComboboxItem key={item.id} value={item}>
-                              <span className="font-mono text-sm">
-                                {item.owner}/{item.name}
-                              </span>
-                            </ComboboxItem>
-                          )}
-                        </ComboboxList>
-                      </ComboboxContent>
-                    </Combobox>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

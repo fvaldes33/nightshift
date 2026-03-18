@@ -12,7 +12,7 @@ import { AgentContext } from "../lib/context";
 import { allTools } from "../tools/index";
 import { getGitHubToken } from "./account.service";
 import { createMessage } from "./message.service";
-import type { getSession } from "./session.service";
+import { ensureWorktree, type getSession } from "./session.service";
 
 interface StreamChatOptions {
   session: Awaited<ReturnType<typeof getSession>>;
@@ -24,7 +24,7 @@ export function streamChat({ session, messages }: StreamChatOptions) {
 
   const repo = session.repo;
   const systemPrompt = `You are nightshift, an AI coding assistant.
-Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${session.branch ?? "main"} | Worktree: ${session.worktreePath ?? "none"}
+Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${session.branch ?? "main"}
 
 Be conversational. When the user asks you to evaluate, explore, or plan something:
 1. Run your exploration, then present what you found in a clear summary.
@@ -54,6 +54,9 @@ You have tools to explore the repo, create and manage tasks, and work with code.
         }
       }
 
+      // Recreate worktree if it was cleaned up
+      const worktreePath = await ensureWorktree(session);
+
       const agentState = {
         githubToken,
         sessionId: session.id,
@@ -61,7 +64,7 @@ You have tools to explore the repo, create and manage tasks, and work with code.
         repoOwner: repo?.owner ?? null,
         repoName: repo?.name ?? null,
         branch: session.branch,
-        worktreePath: session.worktreePath,
+        worktreePath,
       };
 
       const modelMessages = await convertToModelMessages(messages);

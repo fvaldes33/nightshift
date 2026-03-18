@@ -30,7 +30,6 @@ export function StartLoopTool({ part }: { part: StartLoopToolPart }) {
         repoId: session.repoId,
         name: input.name ?? "Ralph Loop",
         branch: session.branch ?? undefined,
-        worktree: session.worktreePath ?? undefined,
         maxIterations: input.maxIterations ?? 10,
         filterConfig: input.filterConfig ?? undefined,
       },

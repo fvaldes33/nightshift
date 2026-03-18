@@ -14,10 +14,11 @@ type Subtask = TaskGetOutput["subtasks"][number];
 
 interface TaskSubtasksProps {
   taskId: string;
+  repoId: string;
   subtasks: Subtask[];
 }
 
-export function TaskSubtasks({ taskId, subtasks }: TaskSubtasksProps) {
+export function TaskSubtasks({ taskId, repoId, subtasks }: TaskSubtasksProps) {
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -36,6 +37,7 @@ export function TaskSubtasks({ taskId, subtasks }: TaskSubtasksProps) {
       return;
     }
     createTask.mutate({
+      repoId,
       parentId: taskId,
       title: trimmed,
       status: "todo",
@@ -75,7 +77,7 @@ export function TaskSubtasks({ taskId, subtasks }: TaskSubtasksProps) {
             return (
               <Link
                 key={sub.id}
-                to={`/tasks/${sub.id}`}
+                to={`/repos/${repoId}/tasks/${sub.id}`}
                 className="hover:bg-accent/50 flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors"
               >
                 <span className={`size-2 shrink-0 rounded-full ${sc.dot}`} />

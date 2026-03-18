@@ -22,15 +22,17 @@ import { Progress } from "@openralph/ui/components/progress";
 import {
   ArrowLeftIcon,
   CopyIcon,
-  ExternalLinkIcon,
+  FolderXIcon,
   GitPullRequestIcon,
   LoaderIcon,
   MoreHorizontalIcon,
   RefreshCwIcon,
   TrashIcon,
+  UploadIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { toast } from "@openralph/ui/components/sonner";
 import { trpc } from "~/lib/trpc-react";
 import { OpenPRDialog } from "./open-pr-dialog";
 
@@ -43,6 +45,7 @@ const statusColor: Record<string, string> = {
 
 interface LoopHeaderProps {
   loop: LoopGetOutput;
+  repoId: string;
   onDelete: () => void;
 }
 
@@ -52,7 +55,8 @@ const prStatusColor: Record<string, string> = {
   closed: "text-red-500",
 };
 
-export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
+export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
+  const loopsUrl = `/repos/${repoId}/loops`;
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const utils = trpc.useUtils();
@@ -61,7 +65,24 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
     onSuccess: () => utils.loop.get.invalidate({ id: loop.id }),
   });
 
-  const canOpenPR = !loop.prUrl && loop.branch && ["complete", "failed"].includes(loop.status);
+  const pushToRemote = trpc.loop.pushToRemote.useMutation({
+    onSuccess: () => {
+      utils.loop.get.invalidate({ id: loop.id });
+      toast.success("Pushed to remote");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const cleanupWorktree = trpc.loop.cleanupWorktree.useMutation({
+    onSuccess: () => {
+      utils.loop.get.invalidate({ id: loop.id });
+      toast.success("Worktree removed");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const canOpenPR = loop.branch && ["complete", "failed"].includes(loop.status);
+  const canPush = loop.prUrl && loop.worktree && ["complete", "failed"].includes(loop.status);
 
   const progress =
     loop.maxIterations > 0
@@ -72,13 +93,13 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
     <>
       <div className="border-border/50 flex items-center gap-2 border-b px-6 py-3">
         <Button variant="ghost" size="icon" className="size-7" asChild>
-          <Link to="/loops">
+          <Link to={loopsUrl}>
             <ArrowLeftIcon className="size-3.5" />
           </Link>
         </Button>
 
         <nav className="text-muted-foreground flex items-center gap-1 text-sm">
-          <Link to="/loops" className="hover:text-foreground transition-colors">
+          <Link to={loopsUrl} className="hover:text-foreground transition-colors">
             Loops
           </Link>
           <span className="text-muted-foreground/50">/</span>
@@ -99,44 +120,38 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
 
         <div className="flex-1" />
 
-        {loop.repo && (
-          <Badge variant="outline" className="font-mono text-[10px]" asChild>
-            <Link to={`/repos/${loop.repo.id}`}>
-              {loop.repo.owner}/{loop.repo.name}
-            </Link>
-          </Badge>
+        {loop.prUrl && (
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
+            <a href={loop.prUrl} target="_blank" rel="noopener noreferrer">
+              <GitPullRequestIcon
+                className={`size-3 ${prStatusColor[loop.prStatus ?? "open"]}`}
+              />
+              PR #{loop.prNumber}
+              {loop.prStatus && loop.prStatus !== "open" && (
+                <span className="capitalize">{loop.prStatus}</span>
+              )}
+            </a>
+          </Button>
         )}
 
-        {loop.prUrl ? (
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
-              <a href={loop.prUrl} target="_blank" rel="noopener noreferrer">
-                <GitPullRequestIcon
-                  className={`size-3 ${prStatusColor[loop.prStatus ?? "open"]}`}
-                />
-                PR #{loop.prNumber}
-                {loop.prStatus && loop.prStatus !== "open" && (
-                  <span className="capitalize">{loop.prStatus}</span>
-                )}
-              </a>
-            </Button>
-            {loop.prStatus !== "merged" && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => syncPR.mutate({ id: loop.id })}
-                disabled={syncPR.isPending}
-              >
-                {syncPR.isPending ? (
-                  <LoaderIcon className="size-3 animate-spin" />
-                ) : (
-                  <RefreshCwIcon className="size-3" />
-                )}
-              </Button>
+        {canPush && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => pushToRemote.mutate({ id: loop.id })}
+            disabled={pushToRemote.isPending}
+          >
+            {pushToRemote.isPending ? (
+              <LoaderIcon className="size-3 animate-spin" />
+            ) : (
+              <UploadIcon className="size-3" />
             )}
-          </div>
-        ) : canOpenPR ? (
+            Push Latest
+          </Button>
+        )}
+
+        {canOpenPR && !loop.prUrl && (
           <Button
             variant="outline"
             size="sm"
@@ -146,7 +161,7 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
             <GitPullRequestIcon className="size-3" />
             Open PR
           </Button>
-        ) : null}
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -161,6 +176,24 @@ export function LoopHeader({ loop, onDelete }: LoopHeaderProps) {
               <CopyIcon className="size-3.5" />
               Copy link
             </DropdownMenuItem>
+            {loop.prUrl && loop.prStatus !== "merged" && (
+              <DropdownMenuItem
+                onClick={() => syncPR.mutate({ id: loop.id })}
+                disabled={syncPR.isPending}
+              >
+                <RefreshCwIcon className="size-3.5" />
+                Sync PR status
+              </DropdownMenuItem>
+            )}
+            {loop.worktree && (
+              <DropdownMenuItem
+                onClick={() => cleanupWorktree.mutate({ id: loop.id })}
+                disabled={cleanupWorktree.isPending}
+              >
+                <FolderXIcon className="size-3.5" />
+                Remove worktree
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"

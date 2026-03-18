@@ -14,3 +14,5 @@ export function createVanillaTRPCClient() {
 }
 
 export type VanillaTRPCClient = ReturnType<typeof createVanillaTRPCClient>;
+
+export const vanillaTRPC = createVanillaTRPCClient();

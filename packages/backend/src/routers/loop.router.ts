@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ralphLoopQueue } from "../jobs/ralph.job";
 import { protectedProcedure, router } from "../lib/trpc";
 import {
+  cleanupLoopWorktree,
   createLoop,
   deleteLoop,
   generatePRSummary,
@@ -9,6 +10,7 @@ import {
   listLoopEvents,
   listLoops,
   openPR,
+  pushToRemote,
   syncPRStatus,
   updateLoop,
 } from "../services/loop.service";
@@ -29,13 +31,23 @@ export const loopRouter = router({
     .input(generatePRSummary.schema)
     .mutation(({ input }) => generatePRSummary(input)),
 
-  /** Create a GitHub PR for this loop and persist the URL. */
+  /** Push latest worktree commits to the remote branch. */
+  pushToRemote: protectedProcedure
+    .input(pushToRemote.schema)
+    .mutation(({ input }) => pushToRemote(input)),
+
+  /** Create a GitHub PR for this loop (or push to existing PR on same branch). */
   openPR: protectedProcedure.input(openPR.schema).mutation(({ input }) => openPR(input)),
 
   /** Refresh PR status (open/merged/closed) from GitHub. */
   syncPRStatus: protectedProcedure
     .input(syncPRStatus.schema)
     .mutation(({ input }) => syncPRStatus(input)),
+
+  /** Remove worktree from disk and null out references on all loops. */
+  cleanupWorktree: protectedProcedure
+    .input(cleanupLoopWorktree.schema)
+    .mutation(({ input }) => cleanupLoopWorktree(input)),
 
   /** Create a loop and immediately queue it for processing. */
   start: protectedProcedure

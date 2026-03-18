@@ -58,23 +58,21 @@ export function TaskProperties({ task, onUpdate }: TaskPropertiesProps) {
       <AssigneeProperty value={task.assignee} onUpdate={onUpdate} />
       <LabelsProperty value={task.labels} onUpdate={onUpdate} />
 
-      {task.repo && (
-        <TaskPropertyRow icon={<FolderGit2Icon />} label="Repo">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                to={`/repos/${task.repo.id}`}
-                className="text-foreground hover:underline block max-w-[120px] truncate text-xs"
-              >
-                {task.repo.owner}/{task.repo.name}
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {task.repo.owner}/{task.repo.name}
-            </TooltipContent>
-          </Tooltip>
-        </TaskPropertyRow>
-      )}
+      <TaskPropertyRow icon={<FolderGit2Icon />} label="Repo">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              to={`/repos/${task.repoId}`}
+              className="text-foreground hover:underline block max-w-[120px] truncate text-xs"
+            >
+              {task.repo ? `${task.repo.owner}/${task.repo.name}` : task.repoId}
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {task.repo ? `${task.repo.owner}/${task.repo.name}` : task.repoId}
+          </TooltipContent>
+        </Tooltip>
+      </TaskPropertyRow>
 
       <TaskPropertyRow icon={<CalendarIcon />} label="Created">
         <span className="text-muted-foreground text-xs">

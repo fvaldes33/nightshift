@@ -19,7 +19,6 @@ export const reposRelations = relations(repos, ({ many }) => ({
 export const sessionsRelations = relations(sessions, ({ one, many }) => ({
   repo: one(repos, { fields: [sessions.repoId], references: [repos.id] }),
   messages: many(messages),
-  tasks: many(tasks),
   loops: many(loops),
 }));
 
@@ -31,7 +30,6 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 // Tasks
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
   repo: one(repos, { fields: [tasks.repoId], references: [repos.id] }),
-  session: one(sessions, { fields: [tasks.sessionId], references: [sessions.id] }),
   parent: one(tasks, { fields: [tasks.parentId], references: [tasks.id], relationName: "subtasks" }),
   subtasks: many(tasks, { relationName: "subtasks" }),
   loops: many(loops),

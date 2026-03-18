@@ -6,9 +6,8 @@ import { useExplorationStore } from "~/hooks/use-exploration-store";
 
 export interface SessionContext {
   id: string;
-  repoId: string | null;
+  repoId: string;
   branch: string | null;
-  worktreePath: string | null;
 }
 
 interface ChatContextValue {

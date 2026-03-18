@@ -1,10 +1,52 @@
 import type { NightshiftMessage } from "@openralph/backend/tools/index";
 import type { Message } from "@openralph/db/models/message.model";
-import type { WorkspaceStatus } from "@openralph/db/models/session.model";
+import type { WorkspaceStatus } from "@openralph/db/models/repo.model";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@openralph/ui/components/alert-dialog";
 import { Badge } from "@openralph/ui/components/badge";
-import { CheckCircleIcon, Loader2Icon, XCircleIcon } from "lucide-react";
-import { useParams } from "react-router";
+import { Button } from "@openralph/ui/components/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@openralph/ui/components/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@openralph/ui/components/dropdown-menu";
+import { Input } from "@openralph/ui/components/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@openralph/ui/components/tooltip";
+import {
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  CopyIcon,
+  Loader2Icon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  TrashIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { ChatView } from "~/components/chat/chat-view";
+import { useSessions } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 function toUIMessages(dbMessages: Message[]): NightshiftMessage[] {
@@ -60,17 +102,40 @@ function WorkspaceStatusIndicator({
 
 export default function Session() {
   const params = useParams();
+  const navigate = useNavigate();
+  const repoId = params.repoId!;
+  const { collection: sessionCollection } = useSessions({ repoId });
 
   const { data: session, isLoading } = trpc.session.get.useQuery({ id: params.sessionId! });
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+
+  const updateSession = trpc.session.update.useMutation();
 
   if (isLoading || !session) return null;
 
   const initialMessages = toUIMessages(session.messages);
+  const workspaceReady = session.repo?.workspaceStatus === "ready";
+  const hasWorktree = session.repo?.localPath || session.repo?.cloneUrl;
+
+  function handleDelete() {
+    sessionCollection.delete(session!.id);
+    navigate(`/repos/${repoId}/sessions`);
+  }
+
+  function handleRename() {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    updateSession.mutate({ id: session!.id, title: trimmed });
+    setRenameOpen(false);
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">
       {/* Header */}
-      <div className="border-border/50 sticky top-0 flex shrink-0 items-center gap-3 border-b px-6 py-3">
+      <div className="border-border/50 sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b bg-background px-6 py-3">
         <h1 className="text-sm font-semibold">{session.title}</h1>
         {session.repo && (
           <Badge variant="outline" className="font-mono text-[10px]">
@@ -82,27 +147,119 @@ export default function Session() {
             {session.branch}
           </Badge>
         )}
+        {!hasWorktree && (
+          <Tooltip>
+            <TooltipTrigger>
+              <Badge variant="outline" className="gap-1 text-[10px] text-yellow-500 border-yellow-500/30">
+                <AlertTriangleIcon className="size-3" />
+                No worktree
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              Repo has no local path or clone URL. Tools that access the filesystem won't work.
+            </TooltipContent>
+          </Tooltip>
+        )}
+
+        <div className="flex-1" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="size-7">
+              <MoreHorizontalIcon className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => navigator.clipboard.writeText(window.location.href)}
+            >
+              <CopyIcon className="size-3.5" />
+              Copy link
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                setRenameValue(session.title);
+                setRenameOpen(true);
+              }}
+            >
+              <PencilIcon className="size-3.5" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <TrashIcon className="size-3.5" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Content */}
-      {session.workspaceStatus === "ready" ? (
+      {workspaceReady ? (
         <ChatView
           session={{
             id: session.id,
             repoId: session.repoId,
             branch: session.branch,
-            worktreePath: session.worktreePath,
           }}
           initialMessages={initialMessages}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center p-6">
           <WorkspaceStatusIndicator
-            status={session.workspaceStatus}
-            error={session.workspaceError}
+            status={session.repo?.workspaceStatus ?? "pending"}
+            error={session.repo?.workspaceError ?? null}
           />
         </div>
       )}
+
+      {/* Delete dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{session.title}" and all its messages will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename session</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleRename();
+            }}
+            placeholder="Session title"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              size="sm"
+              onClick={handleRename}
+              disabled={!renameValue.trim() || updateSession.isPending}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

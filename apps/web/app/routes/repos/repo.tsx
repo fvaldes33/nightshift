@@ -1,3 +1,4 @@
+import type { WorkspaceStatus } from "@openralph/db/models/repo.model";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,13 +14,16 @@ import { Button } from "@openralph/ui/components/button";
 import { Progress } from "@openralph/ui/components/progress";
 import {
   ArrowLeftIcon,
+  CheckCircleIcon,
   CirclePlayIcon,
-  FolderTreeIcon,
   ListChecksIcon,
+  Loader2Icon,
   MessageSquareIcon,
   NotebookTextIcon,
+  PlusIcon,
   RepeatIcon,
   TrashIcon,
+  XCircleIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -31,7 +35,38 @@ export function meta() {
   return [{ title: "Repo — nightshift" }];
 }
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+function WorkspaceStatusBadge({ status }: { status: WorkspaceStatus }) {
+  switch (status) {
+    case "pending":
+      return (
+        <Badge variant="outline" className="gap-1.5 text-[10px]">
+          <Loader2Icon className="size-3 animate-spin" />
+          Pending
+        </Badge>
+      );
+    case "cloning":
+      return (
+        <Badge variant="outline" className="gap-1.5 text-[10px]">
+          <Loader2Icon className="size-3 animate-spin" />
+          Cloning
+        </Badge>
+      );
+    case "ready":
+      return (
+        <Badge variant="secondary" className="gap-1.5 text-[10px] text-green-500">
+          <CheckCircleIcon className="size-3" />
+          Ready
+        </Badge>
+      );
+    case "failed":
+      return (
+        <Badge variant="destructive" className="gap-1.5 text-[10px]">
+          <XCircleIcon className="size-3" />
+          Failed
+        </Badge>
+      );
+  }
+}
 
 export default function RepoDetail() {
   const params = useParams();
@@ -53,10 +88,6 @@ export default function RepoDetail() {
     navigate("/repos");
   }
 
-  const activeWorktrees = sessions.filter(
-    (s) => s.workspaceStatus === "ready" && s.worktreePath,
-  ).length;
-
   const activeLoops = loops.filter(
     (l) => l.status === "running" || l.status === "queued",
   );
@@ -72,6 +103,7 @@ export default function RepoDetail() {
           </Link>
         </Button>
         <div className="flex-1" />
+        <WorkspaceStatusBadge status={repo.workspaceStatus} />
         <Badge variant="secondary" className="font-mono text-[10px]">
           {repo.defaultBranch}
         </Badge>
@@ -85,33 +117,47 @@ export default function RepoDetail() {
         </Button>
       </div>
 
-      <h1 className="text-lg font-semibold">
-        {repo.owner}/{repo.name}
-      </h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-semibold">
+          {repo.owner}/{repo.name}
+        </h1>
+        {repo.workspaceStatus === "failed" && repo.workspaceError && (
+          <p className="text-destructive-foreground text-xs">{repo.workspaceError}</p>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3">
-          <FolderTreeIcon className="size-4 text-muted-foreground shrink-0" />
+        <Link
+          to={`/repos/${repo.id}/sessions/new`}
+          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
+        >
+          <MessageSquareIcon className="size-4 text-muted-foreground shrink-0" />
           <div className="flex flex-col">
-            <span className="text-lg font-semibold tabular-nums">{activeWorktrees}</span>
-            <span className="text-xs text-muted-foreground">Active Worktrees</span>
+            <span className="text-lg font-semibold tabular-nums">{sessions.length}</span>
+            <span className="text-xs text-muted-foreground">Sessions</span>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3">
+        </Link>
+        <Link
+          to={`/repos/${repo.id}/tasks`}
+          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
+        >
           <ListChecksIcon className="size-4 text-muted-foreground shrink-0" />
           <div className="flex flex-col">
             <span className="text-lg font-semibold tabular-nums">{tasks.length}</span>
             <span className="text-xs text-muted-foreground">Tasks</span>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3">
+        </Link>
+        <Link
+          to={`/repos/${repo.id}/loops`}
+          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
+        >
           <RepeatIcon className="size-4 text-muted-foreground shrink-0" />
           <div className="flex flex-col">
             <span className="text-lg font-semibold tabular-nums">{activeLoops.length}</span>
             <span className="text-xs text-muted-foreground">Active Loops</span>
           </div>
-        </div>
+        </Link>
         <Link
           to={`/repos/${repo.id}/docs`}
           className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
@@ -126,9 +172,18 @@ export default function RepoDetail() {
 
       {/* Recent Sessions */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-          Recent Sessions
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+            Recent Sessions
+          </h2>
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+            <Link to={`/repos/${repo.id}/sessions/new`}>
+              <PlusIcon className="size-3.5" />
+              New
+            </Link>
+          </Button>
+        </div>
         {sessions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No sessions yet.</p>
         ) : (
@@ -136,7 +191,7 @@ export default function RepoDetail() {
             {sessions.slice(0, 10).map((s) => (
               <Link
                 key={s.id}
-                to={`/sessions/${s.id}`}
+                to={`/repos/${repo.id}/sessions/${s.id}`}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/50 transition-colors"
               >
                 <MessageSquareIcon className="size-4 text-muted-foreground shrink-0" />
@@ -164,7 +219,7 @@ export default function RepoDetail() {
           <p className="text-sm text-muted-foreground">No tasks yet.</p>
         ) : (
           <div className="rounded-lg border border-border/50">
-            <TaskTable tasks={tasks} />
+            <TaskTable tasks={tasks} repoId={repo.id} />
           </div>
         )}
       </section>
@@ -179,7 +234,7 @@ export default function RepoDetail() {
             {activeLoops.map((loop) => (
               <Link
                 key={loop.id}
-                to={`/loops/${loop.id}`}
+                to={`/repos/${repo.id}/loops/${loop.id}`}
                 className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
               >
                 <CirclePlayIcon className="size-4 text-green-500 shrink-0" />

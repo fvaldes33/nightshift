@@ -13,7 +13,6 @@ import {
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-zod";
 import { z } from "zod";
 import { repos } from "./repo.model";
-import { sessions } from "./session.model";
 
 export const taskStatusEnum = pgEnum("task_status", [
   "backlog",
@@ -40,8 +39,9 @@ export const tasks = pgTable(
       .default(sql`gen_random_uuid()`)
       .primaryKey()
       .notNull(),
-    repoId: uuid("repo_id").references(() => repos.id, { onDelete: "set null" }),
-    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    repoId: uuid("repo_id")
+      .notNull()
+      .references(() => repos.id, { onDelete: "cascade" }),
     parentId: uuid("parent_id").references((): AnyPgColumn => tasks.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description"),
@@ -59,7 +59,6 @@ export const tasks = pgTable(
   },
   (table) => [
     index("tasks_repo_id_idx").on(table.repoId),
-    index("tasks_session_id_idx").on(table.sessionId),
     index("tasks_parent_id_idx").on(table.parentId),
     index("tasks_status_idx").on(table.status),
     index("tasks_assignee_idx").on(table.assignee),

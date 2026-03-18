@@ -39,9 +39,10 @@ const columns: ColumnDef<TaskListItem>[] = [selectColumn, ...taskColumns];
 
 interface TaskTableProps {
   tasks: TaskListItem[];
+  repoId?: string;
 }
 
-export function TaskTable({ tasks }: TaskTableProps) {
+export function TaskTable({ tasks, repoId }: TaskTableProps) {
   const navigate = useNavigate();
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
@@ -56,9 +57,14 @@ export function TaskTable({ tasks }: TaskTableProps) {
     getSortedRowModel: getSortedRowModel(),
   });
 
+  const taskUrl = (task: TaskListItem) => {
+    const rid = repoId ?? task.repoId;
+    return rid ? `/repos/${rid}/tasks/${task.id}` : `/repos`;
+  };
+
   return (
     <>
-      <DataTable table={table} onRowClick={(task) => navigate(`/tasks/${task.id}`)} />
+      <DataTable table={table} onRowClick={(task) => navigate(taskUrl(task))} />
       <DataTableBulkActionToolbar table={table}>
         <TaskBulkCmdk table={table} />
       </DataTableBulkActionToolbar>

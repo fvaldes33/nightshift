@@ -16,7 +16,8 @@ export function meta() {
 export default function Loop() {
   const params = useParams();
   const navigate = useNavigate();
-  const { collection: loopCollection } = useLoops();
+  const repoId = params.repoId!;
+  const { collection: loopCollection } = useLoops({ repoId });
 
   const { data: loop, isLoading } = trpc.loop.get.useQuery({ id: params.loopId! });
   const { data: events } = trpc.loop.events.useQuery(
@@ -30,7 +31,7 @@ export default function Loop() {
 
   function handleDelete() {
     loopCollection.delete(loop!.id);
-    navigate("/loops");
+    navigate(`/repos/${repoId}/loops`);
   }
 
   // Default open: the latest / currently running iteration
@@ -41,7 +42,7 @@ export default function Loop() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <LoopHeader loop={loop} onDelete={handleDelete} />
+      <LoopHeader loop={loop} repoId={repoId} onDelete={handleDelete} />
 
       <div className="flex min-h-0 flex-1">
         {/* Main content */}
@@ -86,7 +87,7 @@ export default function Loop() {
 
         {/* Sidebar */}
         <div className="border-border/50 w-[280px] shrink-0 border-l overflow-y-auto">
-          <LoopProperties loop={loop} />
+          <LoopProperties loop={loop} repoId={repoId} />
         </div>
       </div>
     </div>

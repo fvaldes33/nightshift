@@ -10,11 +10,9 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@openralph/ui/components/sidebar";
-import { ListTodoIcon, NotebookTextIcon } from "lucide-react";
+import { NotebookTextIcon } from "lucide-react";
 import { Link, Outlet, redirect } from "react-router";
-import { LoopNav } from "~/components/loop-nav";
-import { RepoNav } from "~/components/repo-nav";
-import { SessionNav } from "~/components/session-nav";
+import { WorkspaceNav } from "~/components/workspace-nav";
 import { UserFooter } from "~/components/user-footer";
 import { getSession } from "~/lib/auth-client";
 import type { Route } from "./+types/app-layout";
@@ -38,17 +36,10 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         </SidebarHeader>
 
         <SidebarContent>
+          <WorkspaceNav />
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild size="sm">
-                    <Link to="/tasks">
-                      <ListTodoIcon className="size-3.5" />
-                      <span>Tasks</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild size="sm">
                     <Link to="/docs">
@@ -60,9 +51,6 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          <SessionNav />
-          <RepoNav />
-          <LoopNav />
         </SidebarContent>
 
         <UserFooter name={user.name} email={user.email} image={user.image ?? null} />

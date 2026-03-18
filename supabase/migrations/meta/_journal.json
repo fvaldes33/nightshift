@@ -43,6 +43,13 @@
       "when": 1773841334810,
       "tag": "0005_salty_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773858216092,
+      "tag": "0006_dazzling_queen_noir",
+      "breakpoints": true
     }
   ]
 }

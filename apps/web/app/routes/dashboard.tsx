@@ -4,58 +4,28 @@ import {
   MessageSquareIcon,
   PlusIcon,
 } from "lucide-react";
-import { Link, useRouteLoaderData } from "react-router";
+import { Link } from "react-router";
 import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@openralph/ui/components/empty";
 import { Progress } from "@openralph/ui/components/progress";
-import type { Route } from "./+types/dashboard";
+import { useLoops, useRepos, useSessions } from "~/hooks/use-collection";
 
 export function meta() {
-  return [{ title: "Dashboard — ralph" }];
+  return [{ title: "Dashboard — nightshift" }];
 }
 
 export default function Dashboard() {
-  const data = useRouteLoaderData("routes/app-layout") as {
-    sessions: Array<{
-      id: string;
-      title: string;
-      mode: string;
-      status: string;
-      updatedAt: string;
-      repo: { owner: string; name: string } | null;
-    }>;
-    repos: Array<{
-      id: string;
-      owner: string;
-      name: string;
-      defaultBranch: string;
-    }>;
-    loops: Array<{
-      id: string;
-      name: string;
-      status: string;
-      currentIteration: number;
-      maxIterations: number;
-    }>;
-  };
-
-  const sessions = data?.sessions ?? [];
-  const repos = data?.repos ?? [];
-  const loops = data?.loops ?? [];
+  const { data: repos } = useRepos();
+  const { data: sessions } = useSessions();
+  const { data: loops } = useLoops();
   const activeLoops = loops.filter((l) => l.status === "running" || l.status === "queued");
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 overflow-auto p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Dashboard</h1>
-        <Button asChild size="sm" className="gap-1.5">
-          <Link to="/sessions/new">
-            <PlusIcon className="size-3.5" />
-            New Session
-          </Link>
-        </Button>
       </div>
 
       {/* Active Loops */}
@@ -68,7 +38,7 @@ export default function Dashboard() {
             {activeLoops.map((loop) => (
               <Link
                 key={loop.id}
-                to={`/loops/${loop.id}`}
+                to={`/repos/${loop.repoId}/loops/${loop.id}`}
                 className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
               >
                 <CirclePlayIcon className="size-4 text-green-500 shrink-0" />
@@ -99,7 +69,7 @@ export default function Dashboard() {
               </EmptyMedia>
               <EmptyTitle>No sessions yet</EmptyTitle>
               <EmptyDescription>
-                Start a new session to begin working with ralph.
+                Start a new session from a workspace to begin working with nightshift.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -108,7 +78,7 @@ export default function Dashboard() {
             {sessions.slice(0, 10).map((s) => (
               <Link
                 key={s.id}
-                to={`/sessions/${s.id}`}
+                to={`/repos/${s.repoId}/sessions/${s.id}`}
                 className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-accent/50 transition-colors"
               >
                 <MessageSquareIcon className="size-4 text-muted-foreground shrink-0" />
@@ -130,7 +100,7 @@ export default function Dashboard() {
       {/* Repos */}
       <section className="flex flex-col gap-3">
         <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-          Repos
+          Workspaces
         </h2>
         {repos.length === 0 ? (
           <Empty className="border">
@@ -138,9 +108,9 @@ export default function Dashboard() {
               <EmptyMedia variant="icon">
                 <FolderGitIcon />
               </EmptyMedia>
-              <EmptyTitle>No repos connected</EmptyTitle>
+              <EmptyTitle>No workspaces yet</EmptyTitle>
               <EmptyDescription>
-                Connect a GitHub repo to get started.
+                Import a GitHub repo to get started.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

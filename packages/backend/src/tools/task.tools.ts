@@ -51,7 +51,6 @@ export const create_task = tool({
     return createTask({
       ...input,
       repoId: ctx.repoId!,
-      sessionId: ctx.sessionId,
     });
   },
 });

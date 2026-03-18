@@ -39,7 +39,7 @@ export const listTasks = fn(
 export const getTask = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, id),
-    with: { subtasks: true, repo: true, session: true },
+    with: { subtasks: true, repo: true },
   });
   if (!task) throw new AppError("Task not found", "NOT_FOUND");
   return task;
@@ -48,7 +48,6 @@ export const getTask = fn(z.object({ id: z.uuid() }), async ({ id }) => {
 export const createTask = fn(
   insertTaskSchema.pick({
     repoId: true,
-    sessionId: true,
     parentId: true,
     title: true,
     description: true,

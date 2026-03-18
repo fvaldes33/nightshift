@@ -41,18 +41,20 @@ type StartLoopForm = z.infer<typeof startLoopSchema>;
 export function StartLoopDialog({
   open,
   onOpenChange,
+  repoId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  repoId?: string;
 }) {
   const { data: repos } = useRepos();
-  const { data: sessions } = useSessions();
+  const { data: sessions } = useSessions({ repoId });
 
   const form = useForm<StartLoopForm>({
     resolver: zodResolver(startLoopSchema),
     defaultValues: {
       name: "",
-      repoId: "",
+      repoId: repoId ?? "",
       sessionId: "",
       maxIterations: 10,
     },
@@ -91,30 +93,32 @@ export function StartLoopDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="repoId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Repository</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger size="sm">
-                        <SelectValue placeholder="Select repo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {repos.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          {r.owner}/{r.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!repoId && (
+              <FormField
+                control={form.control}
+                name="repoId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repository</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger size="sm">
+                          <SelectValue placeholder="Select repo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {repos.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>
+                            {r.owner}/{r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

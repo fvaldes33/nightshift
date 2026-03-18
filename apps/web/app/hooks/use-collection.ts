@@ -5,44 +5,35 @@ import type { RepoListItem } from "@openralph/backend/types/repo.types";
 import type { SessionListItem } from "@openralph/backend/types/session.types";
 import type { TaskListItem } from "@openralph/backend/types/task.types";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
-  createDocCollection,
-  createLoopCollection,
+  repoCollection,
+  sessionCollection,
+  taskCollection,
+  loopCollection,
   createMessageCollection,
-  createRepoCollection,
-  createSessionCollection,
-  createTaskCollection,
+  docCollection,
 } from "~/lib/collections";
-import { useNightshift } from "~/lib/nightshift-context";
 
-export function useRepos(opts?: { initialData?: RepoListItem[] }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
-  const collection = useMemo(
-    () => createRepoCollection({ queryClient, trpcClient: vanillaTRPC }),
-    [queryClient, vanillaTRPC],
-  );
-  const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
+export function useRepos() {
+  const { data } = useLiveQuery((q) => q.from({ item: repoCollection as any }), []);
   return {
-    data: (data.length > 0 ? data : (opts?.initialData ?? [])) as RepoListItem[],
-    collection,
+    data: data as RepoListItem[],
+    collection: repoCollection,
   };
 }
 
-export function useSessions(opts?: { repoId?: string; initialData?: SessionListItem[] }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
-  const collection = useMemo(
-    () => createSessionCollection({ queryClient, trpcClient: vanillaTRPC, repoId: opts?.repoId }),
-    [queryClient, vanillaTRPC, opts?.repoId],
+export function useSessions(opts?: { repoId?: string }) {
+  const { data: all } = useLiveQuery(
+    (q) => q.from({ item: sessionCollection as any }),
+    [],
   );
-  const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
-  return {
-    data: (data.length > 0 ? data : (opts?.initialData ?? [])) as SessionListItem[],
-    collection,
-  };
+  const data = useMemo(() => {
+    const items = all as SessionListItem[];
+    if (opts?.repoId) return items.filter((s) => s.repoId === opts.repoId);
+    return items;
+  }, [all, opts?.repoId]);
+  return { data, collection: sessionCollection };
 }
 
 export function useTasks(opts?: {
@@ -50,82 +41,62 @@ export function useTasks(opts?: {
   status?: string;
   assignee?: string;
   parentId?: string | null;
-  initialData?: TaskListItem[];
 }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
-  const collection = useMemo(
-    () =>
-      createTaskCollection({
-        queryClient,
-        trpcClient: vanillaTRPC,
-        repoId: opts?.repoId,
-        status: opts?.status,
-        assignee: opts?.assignee,
-        parentId: opts?.parentId,
-      }),
-    [queryClient, vanillaTRPC, opts?.repoId, opts?.status, opts?.assignee, opts?.parentId],
+  const { data: all } = useLiveQuery(
+    (q) => q.from({ item: taskCollection as any }),
+    [],
   );
-  const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
-  return {
-    data: (data.length > 0 ? data : (opts?.initialData ?? [])) as TaskListItem[],
-    collection,
-  };
+  const data = useMemo(() => {
+    let items = all as TaskListItem[];
+    if (opts?.repoId) items = items.filter((t) => t.repoId === opts.repoId);
+    if (opts?.status) items = items.filter((t) => t.status === opts.status);
+    if (opts?.assignee) items = items.filter((t) => t.assignee?.toLowerCase() === opts.assignee?.toLowerCase());
+    if (opts?.parentId !== undefined) {
+      items = items.filter((t) => t.parentId === opts.parentId);
+    }
+    return items;
+  }, [all, opts?.repoId, opts?.status, opts?.assignee, opts?.parentId]);
+  return { data, collection: taskCollection };
 }
 
 export function useLoops(opts?: {
   sessionId?: string;
   repoId?: string;
-  initialData?: LoopListItem[];
 }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
+  const { data: all } = useLiveQuery(
+    (q) => q.from({ item: loopCollection as any }),
+    [],
+  );
+  const data = useMemo(() => {
+    let items = all as LoopListItem[];
+    if (opts?.repoId) items = items.filter((l) => l.repoId === opts.repoId);
+    if (opts?.sessionId) items = items.filter((l) => l.sessionId === opts.sessionId);
+    return items;
+  }, [all, opts?.repoId, opts?.sessionId]);
+  return { data, collection: loopCollection };
+}
+
+export function useMessages(opts: { sessionId: string }) {
   const collection = useMemo(
-    () =>
-      createLoopCollection({
-        queryClient,
-        trpcClient: vanillaTRPC,
-        sessionId: opts?.sessionId,
-        repoId: opts?.repoId,
-      }),
-    [queryClient, vanillaTRPC, opts?.sessionId, opts?.repoId],
+    () => createMessageCollection(opts.sessionId),
+    [opts.sessionId],
   );
   const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
   return {
-    data: (data.length > 0 ? data : (opts?.initialData ?? [])) as LoopListItem[],
+    data: data as MessageListItem[],
     collection,
   };
 }
 
-export function useMessages(opts: { sessionId: string; initialData?: MessageListItem[] }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
-  const collection = useMemo(
-    () =>
-      createMessageCollection({
-        queryClient,
-        trpcClient: vanillaTRPC,
-        sessionId: opts.sessionId,
-      }),
-    [queryClient, vanillaTRPC, opts.sessionId],
+export function useDocs(opts?: { repoId?: string }) {
+  const { data: all } = useLiveQuery(
+    (q) => q.from({ item: docCollection as any }),
+    [],
   );
-  const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
-  return {
-    data: (data.length > 0 ? data : (opts.initialData ?? [])) as MessageListItem[],
-    collection,
-  };
-}
-
-export function useDocs(opts?: { repoId?: string; initialData?: DocListItem[] }) {
-  const queryClient = useQueryClient();
-  const { vanillaTRPC } = useNightshift();
-  const collection = useMemo(
-    () => createDocCollection({ queryClient, trpcClient: vanillaTRPC, repoId: opts?.repoId }),
-    [queryClient, vanillaTRPC, opts?.repoId],
-  );
-  const { data } = useLiveQuery((q) => q.from({ item: collection as any }), [collection]);
-  return {
-    data: (data.length > 0 ? data : (opts?.initialData ?? [])) as DocListItem[],
-    collection,
-  };
+  const data = useMemo(() => {
+    const items = all as DocListItem[];
+    if (opts?.repoId) return items.filter((d) => d.repoId === opts.repoId);
+    return items;
+  }, [all, opts?.repoId]);
+  return { data, collection: docCollection };
 }

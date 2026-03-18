@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { db } from "@openralph/db/config/database";
 import { eq } from "@openralph/db/drizzle";
 import { insertRepoSchema, repos, updateRepoSchema } from "@openralph/db/models/index";
@@ -6,6 +8,12 @@ import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
 import { getGitHubToken } from "./account.service";
+import {
+  gitDefaultBranch,
+  gitRemoteUrl,
+  isGitRepo,
+  parseGitHubRemote,
+} from "./git-cli.service";
 
 export const listRepos = fn(z.object({}), async () => {
   return db.query.repos.findMany({ orderBy: (r, { desc }) => [desc(r.createdAt)] });
@@ -37,6 +45,59 @@ export const deleteRepo = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   if (!repo) throw new AppError("Repo not found", "NOT_FOUND");
   return repo;
 });
+
+/** Validate a local path and return repo info from git. */
+export const resolveLocalRepo = fn(
+  z.object({ path: z.string().min(1) }),
+  async ({ path }) => {
+    const absPath = resolve(path);
+
+    if (!existsSync(absPath)) {
+      throw new AppError("Directory does not exist", "BAD_REQUEST");
+    }
+    if (!isGitRepo(absPath)) {
+      throw new AppError("Not a git repository", "BAD_REQUEST");
+    }
+
+    const remoteUrl = gitRemoteUrl(absPath);
+    const parsed = remoteUrl ? parseGitHubRemote(remoteUrl) : null;
+    const defaultBranch = gitDefaultBranch(absPath);
+
+    // Use the directory name as fallback if no GitHub remote
+    const dirName = absPath.split("/").pop() ?? "repo";
+
+    return {
+      path: absPath,
+      owner: parsed?.owner ?? "local",
+      name: parsed?.name ?? dirName,
+      defaultBranch,
+      cloneUrl: remoteUrl,
+    };
+  },
+);
+
+/** Link an existing local directory as a workspace. Skips cloning. */
+export const linkLocalRepo = fn(
+  z.object({ path: z.string().min(1) }),
+  async ({ path }) => {
+    const info = await resolveLocalRepo({ path });
+
+    const [repo] = await db
+      .insert(repos)
+      .values({
+        owner: info.owner,
+        name: info.name,
+        defaultBranch: info.defaultBranch,
+        cloneUrl: info.cloneUrl,
+        localPath: info.path,
+        workspaceStatus: "ready",
+      })
+      .returning();
+
+    if (!repo) throw new AppError("Failed to create repo", "INTERNAL_ERROR");
+    return repo;
+  },
+);
 
 export const listGitHubRepos = fn(z.object({}), async () => {
   const githubToken = await getGitHubToken({});

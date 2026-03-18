@@ -1,12 +1,7 @@
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import type { ComponentProps } from "react";
 import { Streamdown } from "streamdown";
 import { cn } from "../../lib/utils";
-
-const plugins = { cjk, code, math, mermaid };
+import { streamdownPlugins } from "./streamdown-plugins";
 
 export type StreamdownProps = ComponentProps<typeof Streamdown>;
 
@@ -26,7 +21,7 @@ export function MarkdownContent({ className, ...props }: MarkdownContentProps) {
         "[&_ol]:list-decimal [&_ul]:list-disc",
         className,
       )}
-      plugins={plugins}
+      plugins={streamdownPlugins}
       {...props}
     />
   );

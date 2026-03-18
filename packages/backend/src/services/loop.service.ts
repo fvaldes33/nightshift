@@ -3,13 +3,14 @@ import { db } from "@openralph/db/config/database";
 import { and, eq } from "@openralph/db/drizzle";
 import { loopEvents, insertLoopSchema, loops, updateLoopSchema } from "@openralph/db/models/index";
 import { generateText, Output } from "ai";
-import { execSync } from "node:child_process";
 import { z } from "zod";
 import type { ClaudeStreamEvent } from "../lib/claude-runner";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
 import { getGitHubToken } from "./account.service";
-import { createPullRequest, getPullRequest } from "./github.service";
+import { gitPush, gitUnpushedCount } from "./git-cli.service";
+import { createPullRequest, getPullRequest, listPullRequests } from "./github.service";
+import { cleanupWorktree as removeWorktreeFromDisk } from "./workspace.service";
 
 export const listLoops = fn(
   z.object({ sessionId: z.uuid().optional(), repoId: z.uuid().optional() }),
@@ -47,7 +48,23 @@ export const createLoop = fn(
     maxIterations: true,
   }),
   async (input) => {
-    const [loop] = await db.insert(loops).values(input).returning();
+    // Carry forward PR info from sibling loops on the same session/branch
+    let prFields: { prNumber: number; prUrl: string; prStatus: "open" | "merged" | "closed" } | undefined;
+    if (input.sessionId && input.branch) {
+      const sibling = await db.query.loops.findFirst({
+        where: and(
+          eq(loops.sessionId, input.sessionId),
+          eq(loops.branch, input.branch),
+        ),
+        columns: { prNumber: true, prUrl: true, prStatus: true },
+        orderBy: (l, { desc }) => [desc(l.createdAt)],
+      });
+      if (sibling?.prNumber && sibling.prUrl && sibling.prStatus) {
+        prFields = { prNumber: sibling.prNumber, prUrl: sibling.prUrl, prStatus: sibling.prStatus };
+      }
+    }
+
+    const [loop] = await db.insert(loops).values({ ...input, ...prFields }).returning();
     if (!loop) throw new AppError("Failed to create loop", "INTERNAL_ERROR");
     return loop;
   },
@@ -91,6 +108,90 @@ export const deleteLoop = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const [loop] = await db.delete(loops).where(eq(loops.id, id)).returning();
   if (!loop) throw new AppError("Loop not found", "NOT_FOUND");
   return loop;
+});
+
+// ---------------------------------------------------------------------------
+// Check for existing PR on branch
+// ---------------------------------------------------------------------------
+
+export const checkExistingPR = fn(z.object({ id: z.uuid() }), async ({ id }) => {
+  const loop = await db.query.loops.findFirst({
+    where: eq(loops.id, id),
+    with: { repo: true },
+  });
+  if (!loop) throw new AppError("Loop not found", "NOT_FOUND");
+  if (!loop.repo || !loop.branch) return null;
+
+  const token = await getGitHubToken({});
+
+  const existingPRs = await listPullRequests({
+    token,
+    owner: loop.repo.owner,
+    repo: loop.repo.name,
+    state: "open",
+    head: `${loop.repo.owner}:${loop.branch}`,
+  });
+
+  if (existingPRs.length === 0) return null;
+
+  const pr = existingPRs[0]!;
+  return { number: pr.number, url: pr.url, title: pr.title };
+});
+
+// ---------------------------------------------------------------------------
+// Push to remote
+// ---------------------------------------------------------------------------
+
+export const pushToRemote = fn(z.object({ id: z.uuid() }), async ({ id }) => {
+  const loop = await db.query.loops.findFirst({
+    where: eq(loops.id, id),
+    with: { repo: true },
+  });
+  if (!loop) throw new AppError("Loop not found", "NOT_FOUND");
+  if (!loop.worktree) throw new AppError("Loop has no worktree", "BAD_REQUEST");
+
+  if (gitUnpushedCount(loop.worktree) === 0) {
+    throw new AppError("Nothing to push — remote is already up to date", "BAD_REQUEST");
+  }
+
+  try {
+    gitPush(loop.worktree);
+  } catch {
+    throw new AppError("Failed to push", "BAD_REQUEST");
+  }
+
+  return { pushed: true };
+});
+
+// ---------------------------------------------------------------------------
+// Worktree cleanup
+// ---------------------------------------------------------------------------
+
+export const cleanupLoopWorktree = fn(z.object({ id: z.uuid() }), async ({ id }) => {
+  const loop = await db.query.loops.findFirst({
+    where: eq(loops.id, id),
+    with: { repo: true },
+  });
+  if (!loop) throw new AppError("Loop not found", "NOT_FOUND");
+  if (!loop.worktree) throw new AppError("No worktree to clean up", "BAD_REQUEST");
+  if (!loop.repo) throw new AppError("Loop has no associated repository", "BAD_REQUEST");
+
+  const worktreePath = loop.worktree;
+
+  // Remove from disk via git worktree remove
+  removeWorktreeFromDisk({
+    owner: loop.repo.owner,
+    name: loop.repo.name,
+    worktreePath,
+  });
+
+  // Null out worktree on all loops that reference this path
+  await db
+    .update(loops)
+    .set({ worktree: null })
+    .where(eq(loops.worktree, worktreePath));
+
+  return { removed: worktreePath };
 });
 
 // ---------------------------------------------------------------------------
@@ -187,13 +288,35 @@ export const openPR = fn(
 
     const token = await getGitHubToken({});
 
-    // Push the branch to the remote if worktree is still available
+    // Always push latest commits first
     if (loop.worktree) {
       try {
-        execSync("git push -u origin HEAD", { cwd: loop.worktree, stdio: "pipe" });
+        gitPush(loop.worktree);
       } catch {
         // Branch may already be pushed — continue and let the PR creation fail if not
       }
+    }
+
+    // Check if an open PR already exists for this branch
+    const existingPRs = await listPullRequests({
+      token,
+      owner: loop.repo.owner,
+      repo: loop.repo.name,
+      state: "open",
+      head: `${loop.repo.owner}:${loop.branch}`,
+    });
+
+    if (existingPRs.length > 0) {
+      const existing = existingPRs[0]!;
+
+      // Persist PR info on this loop (may be a follow-up loop on the same branch)
+      const [updated] = await db
+        .update(loops)
+        .set({ prNumber: existing.number, prUrl: existing.url, prStatus: "open" })
+        .where(eq(loops.id, id))
+        .returning();
+
+      return { url: existing.url, number: existing.number, pushed: true, loop: updated };
     }
 
     const pr = await createPullRequest({
@@ -214,7 +337,7 @@ export const openPR = fn(
       .where(eq(loops.id, id))
       .returning();
 
-    return { ...pr, loop: updated };
+    return { ...pr, pushed: false, loop: updated };
   },
 );
 
@@ -239,11 +362,16 @@ export const syncPRStatus = fn(z.object({ id: z.uuid() }), async ({ id }) => {
 
   const prStatus: "open" | "merged" | "closed" = pr.merged ? "merged" : pr.state === "closed" ? "closed" : "open";
 
-  const [updated] = await db
+  // Update all loops sharing this PR number
+  await db
     .update(loops)
     .set({ prStatus })
-    .where(eq(loops.id, id))
-    .returning();
+    .where(eq(loops.prNumber, loop.prNumber));
 
-  return updated;
+  const updated = await db.query.loops.findFirst({
+    where: eq(loops.id, id),
+    with: { repo: true, task: true, session: true },
+  });
+
+  return updated!;
 });

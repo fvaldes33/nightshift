@@ -63,7 +63,7 @@ app.post("/api/chat", async (req, res) => {
     { type: "user", properties: { user: authSession.user } },
     async () => {
       const session = await getSession({ id: sessionId });
-      if (session.workspaceStatus !== "ready") {
+      if (!session.repo || session.repo.workspaceStatus !== "ready") {
         res.status(400).json({ error: "Workspace is not ready" });
         return;
       }
