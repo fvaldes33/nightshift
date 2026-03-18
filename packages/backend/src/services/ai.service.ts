@@ -86,18 +86,23 @@ You have tools to explore the repo, create and manage tasks, and work with code.
         }),
       );
 
+      const existingIds = new Set(messages.map((m) => m.id));
+
       writer.merge(
         result.toUIMessageStream({
           generateMessageId: () => uuidv4(),
           originalMessages: messages,
-          async onFinish({ messages: assistantMsgs }) {
-            for (const msg of assistantMsgs) {
+          async onFinish({ messages: allMsgs }) {
+            for (const msg of allMsgs) {
+              // Skip messages that were already in the original conversation
+              if (existingIds.has(msg.id)) continue;
+
               try {
                 const idParse = z.uuid().safeParse(msg.id);
                 await createMessage({
                   ...(idParse.success ? { id: idParse.data } : {}),
                   sessionId: session.id,
-                  role: "assistant",
+                  role: msg.role,
                   parts: msg.parts,
                 });
               } catch (error) {

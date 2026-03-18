@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ralphLoopQueue } from "../jobs/ralph.job";
 import { protectedProcedure, router } from "../lib/trpc";
 import {
   createLoop,
@@ -56,7 +57,7 @@ export const loopRouter = router({
     )
     .mutation(async ({ input }) => {
       const loop = await createLoop({ ...input, prompt: "" });
-      // await ralphLoopQueue.send({ loopId: loop.id });
+      await ralphLoopQueue.send({ loopId: loop.id });
       return loop;
     }),
 });
