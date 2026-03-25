@@ -37,6 +37,7 @@ import {
   AlertTriangleIcon,
   CheckCircleIcon,
   CopyIcon,
+  GitPullRequestIcon,
   Loader2Icon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -48,6 +49,12 @@ import { useNavigate, useParams } from "react-router";
 import { ChatView } from "~/components/chat/chat-view";
 import { useSessions } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
+
+const prStatusColor: Record<string, string> = {
+  open: "text-green-500",
+  merged: "text-purple-500",
+  closed: "text-red-500",
+};
 
 function toUIMessages(dbMessages: Message[]): NightshiftMessage[] {
   return dbMessages
@@ -147,6 +154,11 @@ export default function Session() {
             {session.branch}
           </Badge>
         )}
+        {session.workspaceMode === "worktree" && (
+          <Badge variant="outline" className="text-[10px]">
+            worktree
+          </Badge>
+        )}
         {!hasWorktree && (
           <Tooltip>
             <TooltipTrigger>
@@ -162,6 +174,20 @@ export default function Session() {
         )}
 
         <div className="flex-1" />
+
+        {session.prUrl && (
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
+            <a href={session.prUrl} target="_blank" rel="noopener noreferrer">
+              <GitPullRequestIcon
+                className={`size-3 ${prStatusColor[session.prStatus ?? "open"]}`}
+              />
+              PR #{session.prNumber}
+              {session.prStatus && session.prStatus !== "open" && (
+                <span className="capitalize">{session.prStatus}</span>
+              )}
+            </a>
+          </Button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
