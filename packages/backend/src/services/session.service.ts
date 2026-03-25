@@ -4,6 +4,7 @@ import { insertSessionSchema, sessions, updateSessionSchema } from "@openralph/d
 import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
+import { gitCurrentBranch } from "./git-cli.service";
 import { cleanupWorktree, createWorktree, ensureClone } from "./workspace.service";
 
 export const listSessions = fn(z.object({ repoId: z.uuid().optional() }), async ({ repoId }) => {
@@ -28,6 +29,7 @@ export const createSession = fn(
     repoId: true,
     title: true,
     mode: true,
+    workspaceMode: true,
     branch: true,
     provider: true,
     model: true,
@@ -48,36 +50,66 @@ export const updateSession = fn(
   },
 );
 
-/** Resolve the working directory for a session.
- *  - If branch matches default (or no branch), return repo.localPath.
- *  - If different branch, create a worktree for that branch.
- */
-export async function ensureWorktree(session: Awaited<ReturnType<typeof getSession>>): Promise<string | null> {
+// ---------------------------------------------------------------------------
+// Resolve working directory for a session
+// ---------------------------------------------------------------------------
+
+type SessionWithRepo = Awaited<ReturnType<typeof getSession>>;
+
+/** Resolve the repo's base directory (localPath or clone). */
+function resolveRepoDir(session: SessionWithRepo): string | null {
   if (!session.repo) return null;
 
-  // Use localPath if available (linked local repo), otherwise clone
-  let repoDir = session.repo.localPath;
-  if (!repoDir) {
-    if (!session.repo.cloneUrl) return null;
-    repoDir = ensureClone({
-      owner: session.repo.owner,
-      name: session.repo.name,
-      cloneUrl: session.repo.cloneUrl,
-    });
+  if (session.repo.localPath) return session.repo.localPath;
+
+  if (!session.repo.cloneUrl) return null;
+  return ensureClone({
+    owner: session.repo.owner,
+    name: session.repo.name,
+    cloneUrl: session.repo.cloneUrl,
+  });
+}
+
+/** Resolve the working directory and current branch for a session.
+ *  - Local mode: use repo dir directly, detect current branch.
+ *  - Worktree mode: create worktree lazily on first call.
+ */
+export async function resolveSessionCwd(
+  session: SessionWithRepo,
+): Promise<{ cwd: string; branch: string } | null> {
+  const repoDir = resolveRepoDir(session);
+  if (!repoDir) return null;
+
+  if (session.workspaceMode === "local") {
+    const branch = gitCurrentBranch(repoDir);
+    return { cwd: repoDir, branch };
   }
 
-  // If no branch or branch matches default, use the repo dir directly
-  if (!session.branch || session.branch === session.repo.defaultBranch) {
-    return repoDir;
+  if (session.worktreePath) {
+    return { cwd: session.worktreePath, branch: session.branch ?? "main" };
   }
 
-  // Different branch — create a worktree
-  return createWorktree({
+  if (!session.branch) {
+    throw new AppError("Worktree session requires a branch", "BAD_REQUEST");
+  }
+
+  const worktreePath = createWorktree({
     repoDir,
     id: session.id,
     branch: session.branch,
   });
+
+  await db
+    .update(sessions)
+    .set({ worktreePath })
+    .where(eq(sessions.id, session.id));
+
+  return { cwd: worktreePath, branch: session.branch };
 }
+
+// ---------------------------------------------------------------------------
+// Delete
+// ---------------------------------------------------------------------------
 
 export const deleteSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const session = await db.query.sessions.findFirst({
@@ -86,13 +118,12 @@ export const deleteSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   });
   if (!session) throw new AppError("Session not found", "NOT_FOUND");
 
-  // Only clean up branch-specific worktrees, not the repo clone
-  if (session.branch && session.repo && session.branch !== session.repo.defaultBranch) {
+  if (session.worktreePath && session.repo) {
     try {
       cleanupWorktree({
         owner: session.repo.owner,
         name: session.repo.name,
-        worktreePath: `${process.env.NIGHTSHIFT_WORKSPACE_DIR ?? "/data/nightshift"}/worktrees/${session.id}`,
+        worktreePath: session.worktreePath,
       });
     } catch {
       // Best-effort cleanup

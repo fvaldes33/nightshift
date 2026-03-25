@@ -24,23 +24,14 @@ import {
   SelectValue,
 } from "@openralph/ui/components/select";
 import { Loader2Icon } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 const startLoopSchema = z.object({
   name: z.string().min(1, "Name is required"),
   repoId: z.string().uuid("Select a repository"),
-  branch: z.string().optional(),
   maxIterations: z.number().int().min(1).max(100),
 });
 
@@ -50,45 +41,34 @@ export function StartLoopDialog({
   open,
   onOpenChange,
   repoId,
+  sessionId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoId?: string;
+  sessionId?: string;
 }) {
   const { data: repos } = useRepos();
-  const [branchTouched, setBranchTouched] = useState(false);
 
   const form = useForm<StartLoopForm>({
     resolver: zodResolver(startLoopSchema),
     defaultValues: {
       name: "",
       repoId: repoId ?? "",
-      branch: "",
       maxIterations: 10,
     },
   });
-
-  const name = form.watch("name");
-
-  // Auto-derive branch from name unless user has manually edited it
-  useEffect(() => {
-    if (!branchTouched && name) {
-      form.setValue("branch", `nightshift/${slugify(name)}`);
-    } else if (!branchTouched && !name) {
-      form.setValue("branch", "");
-    }
-  }, [name, branchTouched, form]);
 
   const startLoop = trpc.loop.start.useMutation({
     onSuccess: () => {
       onOpenChange(false);
       form.reset();
-      setBranchTouched(false);
     },
   });
 
   function onSubmit(values: StartLoopForm) {
-    startLoop.mutate(values);
+    if (!sessionId) return;
+    startLoop.mutate({ ...values, sessionId });
   }
 
   return (
@@ -139,27 +119,6 @@ export function StartLoopDialog({
                 )}
               />
             )}
-
-            <FormField
-              control={form.control}
-              name="branch"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Branch</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="nightshift/my-feature"
-                      {...field}
-                      onChange={(e) => {
-                        setBranchTouched(true);
-                        field.onChange(e);
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

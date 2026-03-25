@@ -57,6 +57,13 @@
       "when": 1774451266399,
       "tag": "0007_lush_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774455420450,
+      "tag": "0008_nappy_wrecker",
+      "breakpoints": true
     }
   ]
 }

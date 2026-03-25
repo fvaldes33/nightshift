@@ -19,7 +19,7 @@ import { ensureMcpConfig } from "../lib/mcp-config";
 import { allTools } from "../tools/index";
 import { getGitHubToken } from "./account.service";
 import { createMessage } from "./message.service";
-import { ensureWorktree, updateSession, type getSession } from "./session.service";
+import { resolveSessionCwd, updateSession, type getSession } from "./session.service";
 
 interface StreamChatOptions {
   session: Awaited<ReturnType<typeof getSession>>;
@@ -28,10 +28,10 @@ interface StreamChatOptions {
 
 const SYSTEM_PROMPT = `You are nightshift, an AI coding assistant.`;
 
-function buildSystemPrompt(session: StreamChatOptions["session"]) {
+function buildSystemPrompt(session: StreamChatOptions["session"], branch: string) {
   const repo = session.repo;
   return `${SYSTEM_PROMPT}
-Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${session.branch ?? "main"}
+Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${branch}
 
 Be conversational. When the user asks you to evaluate, explore, or plan something:
 1. Run your exploration, then present what you found in a clear summary.
@@ -40,7 +40,12 @@ Be conversational. When the user asks you to evaluate, explore, or plan somethin
 
 Never batch-create tasks or make sweeping changes without checking in first. Work collaboratively — the user wants to be part of the decision-making, not just handed a finished result.
 
-You have tools to explore the repo, create and manage tasks, and work with code. Use them thoughtfully.`;
+You have tools to explore the repo, create and manage tasks, and work with code. Use them thoughtfully.
+
+IMPORTANT: For git push and pull request operations, ALWAYS use the nightshift MCP tools instead of running git/gh commands directly:
+- Use mcp__openralph__push_changes (with sessionId: "${session.id}") instead of \`git push\`
+- Use mcp__openralph__create_pull_request (with sessionId: "${session.id}") instead of \`gh pr create\`
+These tools update the nightshift UI with PR status. Direct git/gh commands bypass nightshift tracking.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +108,17 @@ const CHAT_ALLOWED_TOOLS = [
   "mcp__openralph__create_task",
   "mcp__openralph__update_task",
   "mcp__openralph__add_task_comment",
+  "mcp__openralph__get_session",
+  "mcp__openralph__push_changes",
+  "mcp__openralph__create_pull_request",
+].join(",");
+
+// Block git push/PR commands via Bash — force Claude to use MCP tools instead
+const CHAT_DISALLOWED_TOOLS = [
+  "Bash(git push*)",
+  "Bash(git remote*)",
+  "Bash(gh pr *)",
+  "Bash(gh api *)",
 ].join(",");
 
 function streamChatWithClaude({ session, message }: StreamChatOptions) {
@@ -112,8 +128,9 @@ function streamChatWithClaude({ session, message }: StreamChatOptions) {
       await persistUserMessage(session, message);
 
       // Resolve working directory
-      const worktreePath = await ensureWorktree(session);
-      if (!worktreePath) throw new Error("No worktree path available for this session");
+      const resolved = await resolveSessionCwd(session);
+      if (!resolved) throw new Error("No working directory available for this session");
+      const { cwd: worktreePath, branch } = resolved;
 
       // Extract user text from message
       const userText = message.parts
@@ -123,14 +140,15 @@ function streamChatWithClaude({ session, message }: StreamChatOptions) {
 
       // Build CLI args
       const mcpConfig = await ensureMcpConfig();
-      const systemPrompt = buildSystemPrompt(session);
+      const systemPrompt = buildSystemPrompt(session, branch);
 
       const args: string[] = [
         "--mcp-config", mcpConfig,
         "--allowedTools", CHAT_ALLOWED_TOOLS,
+        "--disallowedTools", CHAT_DISALLOWED_TOOLS,
         "--model", session.model,
         "--system-prompt", systemPrompt,
-        "--max-turns", "25",
+        "--max-turns", "50",
       ];
 
       // Resume existing CLI session for multi-turn conversation
@@ -202,8 +220,6 @@ function streamChatWithClaude({ session, message }: StreamChatOptions) {
 // ---------------------------------------------------------------------------
 
 function streamChatWithAISDK({ session, message }: StreamChatOptions) {
-  const systemPrompt = buildSystemPrompt(session);
-
   return createUIMessageStream({
     execute: async ({ writer }) => {
       const githubToken = await getGitHubToken({});
@@ -215,8 +231,11 @@ function streamChatWithAISDK({ session, message }: StreamChatOptions) {
       const previousMessages = toUIMessages(session);
       const messages = [...previousMessages, message];
 
-      // Recreate worktree if it was cleaned up
-      const worktreePath = await ensureWorktree(session);
+      // Resolve working directory
+      const resolved = await resolveSessionCwd(session);
+      const worktreePath = resolved?.cwd ?? null;
+      const branch = resolved?.branch ?? session.branch ?? "main";
+      const systemPrompt = buildSystemPrompt(session, branch);
 
       const agentState = {
         githubToken,
@@ -224,7 +243,7 @@ function streamChatWithAISDK({ session, message }: StreamChatOptions) {
         repoId: session.repoId,
         repoOwner: session.repo?.owner ?? null,
         repoName: session.repo?.name ?? null,
-        branch: session.branch,
+        branch,
         worktreePath,
       };
 

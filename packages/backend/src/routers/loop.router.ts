@@ -2,16 +2,11 @@ import { z } from "zod";
 import { ralphLoopQueue } from "../jobs/ralph.job";
 import { protectedProcedure, router } from "../lib/trpc";
 import {
-  cleanupLoopWorktree,
   createLoop,
   deleteLoop,
-  generatePRSummary,
   getLoop,
   listLoopEvents,
   listLoops,
-  openPR,
-  pushToRemote,
-  syncPRStatus,
   updateLoop,
 } from "../services/loop.service";
 
@@ -26,37 +21,13 @@ export const loopRouter = router({
     .input(listLoopEvents.schema)
     .query(({ input }) => listLoopEvents(input)),
 
-  /** Generate a PR title + body from loop events using AI. */
-  generatePRSummary: protectedProcedure
-    .input(generatePRSummary.schema)
-    .mutation(({ input }) => generatePRSummary(input)),
-
-  /** Push latest worktree commits to the remote branch. */
-  pushToRemote: protectedProcedure
-    .input(pushToRemote.schema)
-    .mutation(({ input }) => pushToRemote(input)),
-
-  /** Create a GitHub PR for this loop (or push to existing PR on same branch). */
-  openPR: protectedProcedure.input(openPR.schema).mutation(({ input }) => openPR(input)),
-
-  /** Refresh PR status (open/merged/closed) from GitHub. */
-  syncPRStatus: protectedProcedure
-    .input(syncPRStatus.schema)
-    .mutation(({ input }) => syncPRStatus(input)),
-
-  /** Remove worktree from disk and null out references on all loops. */
-  cleanupWorktree: protectedProcedure
-    .input(cleanupLoopWorktree.schema)
-    .mutation(({ input }) => cleanupLoopWorktree(input)),
-
   /** Create a loop and immediately queue it for processing. */
   start: protectedProcedure
     .input(
       z.object({
-        sessionId: z.uuid().optional(),
+        sessionId: z.uuid(),
         repoId: z.uuid(),
         name: z.string(),
-        branch: z.string().optional(),
         maxIterations: z.number().int().default(10),
         filterConfig: z
           .object({

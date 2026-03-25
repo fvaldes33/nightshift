@@ -4,8 +4,9 @@ import { ensureMcpConfig } from "../lib/mcp-config";
 import { createQueue } from "../lib/queue-builder";
 import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
 import { assembleRalphPrompt } from "../services/prompt.service";
+import { getSession, resolveSessionCwd } from "../services/session.service";
 import { listTasks } from "../services/task.service";
-import { createWorktree, ensureRepoWorkspace } from "../services/workspace.service";
+import { ensureRepoWorkspace } from "../services/workspace.service";
 
 // ---------------------------------------------------------------------------
 // Queue: ralph/loop — sets status to running and kicks off first iteration
@@ -29,17 +30,14 @@ ralphLoopQueue.work(async (job) => {
   if (!loop.repo) throw new Error(`Loop ${loopId} has no associated repo`);
 
   // Ensure repo is cloned locally
-  const repoDir = await ensureRepoWorkspace(loop.repo);
+  await ensureRepoWorkspace(loop.repo);
 
-  // Create worktree for non-default branches, otherwise use repo dir directly
-  let worktree: string;
-  if (loop.branch && loop.branch !== loop.repo.defaultBranch) {
-    worktree = createWorktree({ repoDir, id: loop.id, branch: loop.branch });
-  } else {
-    worktree = repoDir;
-  }
+  // Resolve cwd from the loop's session
+  const session = await getSession({ id: loop.sessionId });
+  const resolved = await resolveSessionCwd(session);
+  if (!resolved) throw new Error(`Could not resolve working directory for loop ${loopId}`);
 
-  await updateLoop({ id: loopId, status: "running", worktree });
+  await updateLoop({ id: loopId, status: "running" });
 
   // Queue the first iteration
   await ralphIterationQueue.send({ loopId, iteration: loop.currentIteration });
@@ -72,7 +70,7 @@ ralphIterationQueue.work(async (job) => {
     return;
   }
 
-  const cwd = loop.worktree ?? loop.repo?.localPath ?? ".";
+  const cwd = loop.session?.worktreePath ?? loop.repo?.localPath ?? ".";
 
   try {
     const mcpConfig = await ensureMcpConfig();
@@ -107,7 +105,7 @@ ralphIterationQueue.work(async (job) => {
       prompt,
       cwd,
       timeoutSec: 900, // 15 min per iteration
-      args: ["--mcp-config", mcpConfig, "--allowedTools", allowedTools, "--max-turns", "50"],
+      args: ["--mcp-config", mcpConfig, "--allowedTools", allowedTools],
       onEvent: (event) => {
         const currentSeq = seq++;
         // Fire-and-forget: don't block the stream on DB writes
