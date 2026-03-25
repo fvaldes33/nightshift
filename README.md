@@ -1,10 +1,17 @@
 # Nightshift
 
-Self-hosted AI coding assistant that runs autonomous coding loops against your GitHub repos. Spawns Claude Code CLI processes locally so you can use your Claude Max subscription — no per-token API costs.
+Run autonomous AI coding agents against your GitHub repos — using your **Claude Max subscription**, with zero per-token API costs.
+
+Nightshift runs entirely on your local machine. It spawns `claude -p` CLI subprocesses to execute tasks, so your existing Claude Max auth just works. No API key juggling, no usage bills — just connect a repo, create a task, and let it run.
 
 ## How it works
 
-Nightshift runs on your local machine as a single Express process: web UI, tRPC API, and pgBoss queue workers. When you kick off a "ralph" loop, it spawns `claude -p` CLI subprocesses that iterate on tasks until they're done — reading code, writing code, creating PRs — all using your existing Claude Max auth.
+Nightshift is a single Express process: web UI, tRPC API, and pgBoss queue workers all in one. When you kick off a "ralph" loop, it:
+
+1. Clones the target repo into a local worktree
+2. Spawns `claude -p` CLI with an MCP server that exposes task/message tools
+3. Runs iterative passes — Claude reads the task, explores the code, makes changes, creates PRs
+4. Loops until the task is marked complete or the iteration limit is reached
 
 ```
 ┌─────────────────────────────────────┐
@@ -63,7 +70,7 @@ packages/common/    → Shared utilities
 **1. Clone and install dependencies**
 
 ```bash
-git clone https://github.com/your-org/nightshift.git
+git clone https://github.com/fvaldes33/nightshift.git
 cd nightshift
 bun install
 ```
@@ -96,7 +103,7 @@ Fill in your `.env`:
 | `GITHUB_CLIENT_ID` | From your GitHub OAuth App |
 | `GITHUB_CLIENT_SECRET` | From your GitHub OAuth App |
 
-AI provider keys (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) just for the session chat interface — ralph loops use the Claude CLI with your Max subscription instead of API keys.
+AI provider keys (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) are optional — they power the session chat interface. Ralph loops use the Claude CLI with your Max subscription and don't need API keys.
 
 **4. Set up the database**
 
@@ -104,11 +111,7 @@ AI provider keys (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) just for the sessio
 bun run db:push
 ```
 
-**5. Update the email allowlist**
-
-Auth is gated by an email allowlist in `packages/backend/src/lib/auth.ts`. Update the `databaseHooks.user.create.before` hook with your own email or domain before signing up.
-
-**6. Start dev server**
+**5. Start dev server**
 
 ```bash
 bun run dev
@@ -134,24 +137,12 @@ bun run supabase:stop    # Stop local Supabase
 bun run supabase:reset   # Reset database (runs migrations + seed)
 ```
 
-## Ralph loops
-
-Ralph is the autonomous coding agent. It works by:
-
-1. Cloning the target repo into a local worktree
-2. Spawning `claude -p` CLI with an MCP server that exposes task/message tools
-3. Running iterative passes — Claude reads the task, explores the code, makes changes, creates PRs
-4. Looping until the task is marked complete or the iteration limit is reached
-
-Because it runs locally, Claude CLI uses your Max subscription auth — no API key needed, no token costs. The MCP server gives Claude access to task management, messaging, and loop control tools.
-
 ## Roadmap
 
 - **Claude Local Chat** — Route the interactive chat through the Claude CLI instead of the Anthropic API, so chat uses your Max subscription too (zero API cost for everything). See `specs/claude-local.md`.
 - **Codex CLI support** — Spawn OpenAI's Codex CLI for loops, same pattern as Claude CLI but for OpenAI Pro/Team subscribers.
 - **Gemini CLI support** — Same idea — Google's Gemini CLI for Gemini Advanced subscribers.
 - **Multi-agent orchestration** — Run multiple ralph loops in parallel across different repos or branches, with a coordinator that manages dependencies between tasks.
-- **Configurable email allowlist** — Move the hardcoded allowlist to the database with a settings UI, so you can invite teammates without code changes.
 - **Cost dashboard** — Track token usage, API costs, and time-per-task across providers. Compare what a loop would have cost on API vs what it cost on Max.
 - **Custom tool builder** — Define new MCP tools from the UI (shell scripts, API calls, database queries) that ralph can use during loops without touching code.
 - **Session branching** — Fork a chat session at any point to explore alternative approaches without losing the original thread.
