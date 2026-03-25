@@ -30,7 +30,9 @@ export const loops = pgTable(
       .default(sql`gen_random_uuid()`)
       .primaryKey()
       .notNull(),
-    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
     repoId: uuid("repo_id")
       .notNull()
       .references(() => repos.id, { onDelete: "cascade" }),
@@ -38,12 +40,7 @@ export const loops = pgTable(
     name: text("name").notNull(),
     status: loopStatusEnum("status").notNull().default("queued"),
     prompt: text("prompt").notNull(),
-    branch: text("branch"),
-    worktree: text("worktree"),
     filterConfig: jsonb("filter_config").$type<LoopFilterConfig>(),
-    prNumber: integer("pr_number"),
-    prUrl: text("pr_url"),
-    prStatus: text("pr_status").$type<"open" | "merged" | "closed">(),
     currentIteration: integer("current_iteration").notNull().default(0),
     maxIterations: integer("max_iterations").notNull().default(10),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -61,21 +58,17 @@ export const loops = pgTable(
 );
 
 const zLoopStatus = z.enum(loopStatusEnum.enumValues);
-const zPRStatus = z.enum(["open", "merged", "closed"]);
 
 export const insertLoopSchema = createInsertSchema(loops, {
   status: zLoopStatus,
-  prStatus: zPRStatus.nullish(),
   filterConfig: zLoopFilterConfigSchema.nullish(),
 });
 export const selectLoopSchema = createSelectSchema(loops, {
   status: zLoopStatus,
-  prStatus: zPRStatus.nullable(),
   filterConfig: zLoopFilterConfigSchema.nullable(),
 });
 export const updateLoopSchema = createUpdateSchema(loops, {
   status: zLoopStatus.optional(),
-  prStatus: zPRStatus.nullish(),
   filterConfig: zLoopFilterConfigSchema.nullish(),
 });
 

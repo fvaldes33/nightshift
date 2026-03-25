@@ -24,7 +24,8 @@ import {
   FormMessage,
 } from "@openralph/ui/components/form";
 import { Input } from "@openralph/ui/components/input";
-import { CheckIcon, Loader2Icon } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@openralph/ui/components/toggle-group";
+import { CheckIcon, FolderIcon, GitForkIcon, Loader2Icon } from "lucide-react";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router";
@@ -41,6 +42,7 @@ function slugify(text: string): string {
 const newSessionSchema = insertSessionSchema
   .pick({ title: true, provider: true, model: true })
   .extend({
+    workspaceMode: z.enum(["local", "worktree"]),
     branch: z.string().optional(),
   });
 
@@ -107,6 +109,7 @@ export default function NewSession() {
     resolver: zodResolver(newSessionSchema),
     defaultValues: {
       title: "",
+      workspaceMode: "local",
       provider: "anthropic",
       model: "claude-sonnet-4-6",
       branch: "",
@@ -114,15 +117,18 @@ export default function NewSession() {
   });
 
   const title = form.watch("title");
+  const workspaceMode = form.watch("workspaceMode");
 
-  // Auto-derive branch from title unless user has manually edited it
   useEffect(() => {
-    if (!branchTouched && title) {
+    if (workspaceMode === "local") {
+      form.setValue("branch", "");
+      setBranchTouched(false);
+    } else if (!branchTouched && title) {
       form.setValue("branch", `nightshift/${slugify(title)}`);
     } else if (!branchTouched && !title) {
       form.setValue("branch", "");
     }
-  }, [title, branchTouched, form]);
+  }, [title, branchTouched, form, workspaceMode]);
 
   async function onSubmit(values: NewSessionForm) {
     setSubmitting(true);
@@ -130,10 +136,11 @@ export default function NewSession() {
       const session = await createSession.mutateAsync({
         repoId,
         title: values.title,
-        mode: "plan",
+        mode: "chat",
+        workspaceMode: values.workspaceMode,
         provider: values.provider,
         model: values.model,
-        branch: values.branch || null,
+        branch: values.workspaceMode === "worktree" ? (values.branch || null) : null,
       });
 
       navigate(`/repos/${repoId}/sessions/${session.id}`);
@@ -167,26 +174,61 @@ export default function NewSession() {
 
           <FormField
             control={form.control}
-            name="branch"
+            name="workspaceMode"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Branch</FormLabel>
+                <FormLabel>Workspace</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="nightshift/fix-auth-redirect"
-                    className="font-mono text-sm"
-                    {...field}
-                    onChange={(e) => {
-                      setBranchTouched(true);
-                      field.onChange(e);
-                    }}
-                  />
+                  <ToggleGroup
+                    type="single"
+                    value={field.value}
+                    onValueChange={(v) => { if (v) field.onChange(v); }}
+                    className="justify-start"
+                  >
+                    <ToggleGroupItem value="local" className="gap-1.5 text-xs">
+                      <FolderIcon className="size-3" />
+                      Local
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="worktree" className="gap-1.5 text-xs">
+                      <GitForkIcon className="size-3" />
+                      Worktree
+                    </ToggleGroupItem>
+                  </ToggleGroup>
                 </FormControl>
-                <FormDescription>Auto-generated from title. Edit to override.</FormDescription>
+                <FormDescription>
+                  {field.value === "local"
+                    ? "Work directly on the repo. Uses the current branch."
+                    : "Create an isolated worktree on a new branch."}
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {workspaceMode === "worktree" && (
+            <FormField
+              control={form.control}
+              name="branch"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Branch</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="nightshift/fix-auth-redirect"
+                      className="font-mono text-sm"
+                      {...field}
+                      onChange={(e) => {
+                        setBranchTouched(true);
+                        field.onChange(e);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>Auto-generated from title. Edit to override.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}

@@ -50,9 +50,9 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<GitBranchIcon />} label="Branch">
-        {loop.branch ? (
-          <Clipboard value={loop.branch} className="font-mono text-xs text-muted-foreground">
-            {loop.branch}
+        {loop.session?.branch ? (
+          <Clipboard value={loop.session.branch} className="font-mono text-xs text-muted-foreground">
+            {loop.session.branch}
           </Clipboard>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>
@@ -60,16 +60,16 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<GitPullRequestIcon />} label="PR">
-        {loop.prUrl ? (
-          <Clipboard value={loop.prUrl} className="text-xs">
+        {loop.session?.prUrl ? (
+          <Clipboard value={loop.session.prUrl} className="text-xs">
             <a
-              href={loop.prUrl}
+              href={loop.session.prUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="text-foreground hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
-              #{loop.prNumber}
+              #{loop.session.prNumber}
             </a>
           </Clipboard>
         ) : (
@@ -78,9 +78,9 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
       </TaskPropertyRow>
 
       <TaskPropertyRow icon={<FolderIcon />} label="Worktree">
-        {loop.worktree ? (
-          <Clipboard value={loop.worktree} className="font-mono text-xs text-muted-foreground">
-            {loop.worktree}
+        {loop.session?.worktreePath ? (
+          <Clipboard value={loop.session.worktreePath} className="font-mono text-xs text-muted-foreground">
+            {loop.session.worktreePath}
           </Clipboard>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>

@@ -26,10 +26,9 @@ export function StartLoopTool({ part }: { part: StartLoopToolPart }) {
 
     startLoop.mutate(
       {
-        sessionId: session.id ?? undefined,
+        sessionId: session.id,
         repoId: session.repoId,
         name: input.name ?? "Ralph Loop",
-        branch: session.branch ?? undefined,
         maxIterations: input.maxIterations ?? 10,
         filterConfig: input.filterConfig ?? undefined,
       },

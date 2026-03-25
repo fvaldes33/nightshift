@@ -22,19 +22,12 @@ import { Progress } from "@openralph/ui/components/progress";
 import {
   ArrowLeftIcon,
   CopyIcon,
-  FolderXIcon,
   GitPullRequestIcon,
-  LoaderIcon,
   MoreHorizontalIcon,
-  RefreshCwIcon,
   TrashIcon,
-  UploadIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-import { toast } from "@openralph/ui/components/sonner";
-import { trpc } from "~/lib/trpc-react";
-import { OpenPRDialog } from "./open-pr-dialog";
 
 const statusColor: Record<string, string> = {
   running: "bg-green-500",
@@ -58,31 +51,11 @@ const prStatusColor: Record<string, string> = {
 export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
   const loopsUrl = `/repos/${repoId}/loops`;
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [prDialogOpen, setPrDialogOpen] = useState(false);
-  const utils = trpc.useUtils();
 
-  const syncPR = trpc.loop.syncPRStatus.useMutation({
-    onSuccess: () => utils.loop.get.invalidate({ id: loop.id }),
-  });
-
-  const pushToRemote = trpc.loop.pushToRemote.useMutation({
-    onSuccess: () => {
-      utils.loop.get.invalidate({ id: loop.id });
-      toast.success("Pushed to remote");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const cleanupWorktree = trpc.loop.cleanupWorktree.useMutation({
-    onSuccess: () => {
-      utils.loop.get.invalidate({ id: loop.id });
-      toast.success("Worktree removed");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const canOpenPR = loop.branch && ["complete", "failed"].includes(loop.status);
-  const canPush = loop.prUrl && loop.worktree && ["complete", "failed"].includes(loop.status);
+  const session = loop.session;
+  const prUrl = session?.prUrl;
+  const prNumber = session?.prNumber;
+  const prStatus = session?.prStatus;
 
   const progress =
     loop.maxIterations > 0
@@ -120,46 +93,17 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
 
         <div className="flex-1" />
 
-        {loop.prUrl && (
+        {prUrl && (
           <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
-            <a href={loop.prUrl} target="_blank" rel="noopener noreferrer">
+            <a href={prUrl} target="_blank" rel="noopener noreferrer">
               <GitPullRequestIcon
-                className={`size-3 ${prStatusColor[loop.prStatus ?? "open"]}`}
+                className={`size-3 ${prStatusColor[prStatus ?? "open"]}`}
               />
-              PR #{loop.prNumber}
-              {loop.prStatus && loop.prStatus !== "open" && (
-                <span className="capitalize">{loop.prStatus}</span>
+              PR #{prNumber}
+              {prStatus && prStatus !== "open" && (
+                <span className="capitalize">{prStatus}</span>
               )}
             </a>
-          </Button>
-        )}
-
-        {canPush && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => pushToRemote.mutate({ id: loop.id })}
-            disabled={pushToRemote.isPending}
-          >
-            {pushToRemote.isPending ? (
-              <LoaderIcon className="size-3 animate-spin" />
-            ) : (
-              <UploadIcon className="size-3" />
-            )}
-            Push Latest
-          </Button>
-        )}
-
-        {canOpenPR && !loop.prUrl && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => setPrDialogOpen(true)}
-          >
-            <GitPullRequestIcon className="size-3" />
-            Open PR
           </Button>
         )}
 
@@ -176,24 +120,6 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
               <CopyIcon className="size-3.5" />
               Copy link
             </DropdownMenuItem>
-            {loop.prUrl && loop.prStatus !== "merged" && (
-              <DropdownMenuItem
-                onClick={() => syncPR.mutate({ id: loop.id })}
-                disabled={syncPR.isPending}
-              >
-                <RefreshCwIcon className="size-3.5" />
-                Sync PR status
-              </DropdownMenuItem>
-            )}
-            {loop.worktree && (
-              <DropdownMenuItem
-                onClick={() => cleanupWorktree.mutate({ id: loop.id })}
-                disabled={cleanupWorktree.isPending}
-              >
-                <FolderXIcon className="size-3.5" />
-                Remove worktree
-              </DropdownMenuItem>
-            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
@@ -222,8 +148,6 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <OpenPRDialog loop={loop} open={prDialogOpen} onOpenChange={setPrDialogOpen} />
     </>
   );
 }
