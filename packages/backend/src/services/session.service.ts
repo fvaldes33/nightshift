@@ -4,7 +4,9 @@ import { insertSessionSchema, sessions, updateSessionSchema } from "@openralph/d
 import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
+import { getGitHubToken } from "./account.service";
 import { gitCurrentBranch } from "./git-cli.service";
+import { getPullRequest } from "./github.service";
 import { cleanupWorktree, createWorktree, ensureClone } from "./workspace.service";
 
 export const listSessions = fn(z.object({ repoId: z.uuid().optional() }), async ({ repoId }) => {
@@ -21,8 +23,40 @@ export const getSession = fn(z.object({ id: z.uuid() }), async ({ id }) => {
     with: { repo: true, messages: { orderBy: (m, { asc }) => [asc(m.createdAt)] } },
   });
   if (!session) throw new AppError("Session not found", "NOT_FOUND");
+
+  // Fire-and-forget: sync PR status from GitHub if there's an open PR
+  // Realtime will push the update to the frontend if status changed
+  if (session.prNumber && session.prStatus === "open" && session.repo) {
+    syncPRStatusInBackground(session.id, session.repo, session.prNumber, session.prStatus).catch(() => {});
+  }
+
   return session;
 });
+
+async function syncPRStatusInBackground(
+  sessionId: string,
+  repo: { owner: string; name: string },
+  prNumber: number,
+  currentStatus: string | null,
+) {
+  const token = await getGitHubToken({});
+  const pr = await getPullRequest({
+    token,
+    owner: repo.owner,
+    repo: repo.name,
+    pullNumber: prNumber,
+  });
+
+  const prStatus: "open" | "merged" | "closed" = pr.merged
+    ? "merged"
+    : pr.state === "closed"
+      ? "closed"
+      : "open";
+
+  if (prStatus !== currentStatus) {
+    await db.update(sessions).set({ prStatus }).where(eq(sessions.id, sessionId));
+  }
+}
 
 export const createSession = fn(
   insertSessionSchema.pick({
