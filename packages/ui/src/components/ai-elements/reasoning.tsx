@@ -1,3 +1,4 @@
+import { linkSafetyConfig } from "./streamdown-link-safety";
 import { streamdownPlugins } from "./streamdown-plugins";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import {
@@ -161,7 +162,7 @@ export const ReasoningContent = memo(({ className, children, ...props }: Reasoni
       )}
       {...props}
     >
-      <Streamdown className="grid gap-2" plugins={streamdownPlugins}>
+      <Streamdown className="grid gap-2" plugins={streamdownPlugins} linkSafety={linkSafetyConfig}>
         {children}
       </Streamdown>
     </div>

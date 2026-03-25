@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 import { Streamdown } from "streamdown";
 import { cn } from "../../lib/utils";
+import { linkSafetyConfig } from "./streamdown-link-safety";
 import { streamdownPlugins } from "./streamdown-plugins";
 
 export type StreamdownProps = ComponentProps<typeof Streamdown>;
@@ -22,6 +23,7 @@ export function MarkdownContent({ className, ...props }: MarkdownContentProps) {
         className,
       )}
       plugins={streamdownPlugins}
+      linkSafety={linkSafetyConfig}
       {...props}
     />
   );

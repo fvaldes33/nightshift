@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@openralph/ui/components/tooltip";
 import { cn } from "@openralph/ui/lib/utils";
+import { linkSafetyConfig } from "./streamdown-link-safety";
 import { streamdownPlugins } from "./streamdown-plugins";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -280,6 +281,7 @@ export const MessageResponse = memo(
         className,
       )}
       plugins={streamdownPlugins}
+      linkSafety={linkSafetyConfig}
       {...props}
     />
   ),
