@@ -12,7 +12,7 @@ import type { TextUIPart } from "ai";
 import { CheckIcon, ClipboardCopyIcon } from "lucide-react";
 import { memo, useCallback, useState } from "react";
 import { ClientOnly } from "../client-only";
-import { toolRenderMap, type ToolPart } from "./tools";
+import { toolRenderMap, type AnyToolPart, type ToolPart } from "./tools";
 
 interface ChatMessageProps {
   message: NightshiftMessage;
@@ -63,23 +63,24 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
             );
           }
 
-          if (part.type.startsWith("tool-")) {
-            const toolPart = part as ToolPart;
-            const CustomTool = toolRenderMap.get(toolPart.type);
+          if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+            const toolPart = part as AnyToolPart;
+            const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
+            const CustomTool = toolRenderMap.get(toolType);
 
-            if (CustomTool) return <CustomTool key={index} part={toolPart} />;
+            if (CustomTool) return <CustomTool key={index} part={toolPart as ToolPart} />;
 
             return (
               <Tool key={index}>
                 <ToolHeader
-                  type={toolPart.type}
+                  type={toolType}
                   state={toolPart.state}
-                  title={toolPart.type.replace("tool-", "")}
+                  title={toolType.replace("tool-", "")}
                 />
                 <ToolContent>
                   <ToolInput input={toolPart.input} />
                   <ToolOutput
-                    output={toolPart.output !== undefined ? toolPart.output : undefined}
+                    output={"output" in toolPart && toolPart.output !== undefined ? toolPart.output : undefined}
                     errorText={toolPart.errorText}
                   />
                 </ToolContent>

@@ -50,6 +50,13 @@
       "when": 1773858216092,
       "tag": "0006_dazzling_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774451266399,
+      "tag": "0007_lush_fenris",
+      "breakpoints": true
     }
   ]
 }

@@ -52,12 +52,11 @@ app.post("/api/chat", async (req, res) => {
     return;
   }
 
-  const { id: sessionId, messages } = req.body as { id: string; messages: UIMessage[] };
-  if (!sessionId || !messages?.length) {
-    res.status(400).json({ error: "Missing session id or messages" });
+  const { id: sessionId, message } = req.body as { id: string; message: UIMessage };
+  if (!sessionId || !message) {
+    res.status(400).json({ error: "Missing session id or message" });
     return;
   }
-
 
   await ActorContext.with(
     { type: "user", properties: { user: authSession.user } },
@@ -68,7 +67,7 @@ app.post("/api/chat", async (req, res) => {
         return;
       }
 
-      const stream = streamChat({ session, messages });
+      const stream = streamChat({ session, message });
       pipeUIMessageStreamToResponse({ response: res, stream });
     },
   );

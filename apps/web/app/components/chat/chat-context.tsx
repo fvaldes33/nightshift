@@ -29,7 +29,12 @@ function createChatInstance(
   return new Chat<NightshiftMessage>({
     id: session.id,
     messages: initialMessages,
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      prepareSendMessagesRequest({ messages, id }) {
+        return { body: { message: messages[messages.length - 1], id } };
+      },
+    }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onData: (dataPart) => {
       if (dataPart.type === "data-exploration") {

@@ -23,6 +23,7 @@ export const sessions = pgTable(
     model: text("model").notNull().default("claude-sonnet-4-6"),
     status: sessionStatusEnum("status").notNull().default("active"),
     branch: text("branch"),
+    claudeSessionId: text("claude_session_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()

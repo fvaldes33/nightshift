@@ -1,49 +1,11 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { z } from "zod";
 import { runClaude } from "../lib/claude-runner";
+import { ensureMcpConfig } from "../lib/mcp-config";
 import { createQueue } from "../lib/queue-builder";
 import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
 import { assembleRalphPrompt } from "../services/prompt.service";
 import { listTasks } from "../services/task.service";
 import { createWorktree, ensureRepoWorkspace } from "../services/workspace.service";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const BASE_DIR =
-  process.env.NIGHTSHIFT_WORKSPACE_DIR ?? join(process.env.HOME ?? "", ".nightshift");
-const MCP_CONFIG_PATH = join(BASE_DIR, "mcp-config.json");
-
-/** Write the MCP config once to a persistent location. Reuses if already present. */
-async function ensureMcpConfig(): Promise<string> {
-  if (existsSync(MCP_CONFIG_PATH)) return MCP_CONFIG_PATH;
-
-  const mcpRunPath = join(import.meta.dirname, "../mcp/run.ts");
-  console.log(`[ralph] MCP run.ts path: ${mcpRunPath}`);
-
-  if (!existsSync(BASE_DIR)) {
-    mkdirSync(BASE_DIR, { recursive: true });
-  }
-
-  const config = {
-    mcpServers: {
-      openralph: {
-        type: "stdio",
-        command: "bun",
-        args: ["run", mcpRunPath],
-        env: {
-          DATABASE_URL: process.env.DATABASE_URL ?? "",
-        },
-      },
-    },
-  };
-  await writeFile(MCP_CONFIG_PATH, JSON.stringify(config, null, 2));
-  console.log(`[ralph] Wrote MCP config to ${MCP_CONFIG_PATH}`);
-  return MCP_CONFIG_PATH;
-}
 
 // ---------------------------------------------------------------------------
 // Queue: ralph/loop — sets status to running and kicks off first iteration

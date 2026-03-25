@@ -63,29 +63,29 @@ function buildEnv(): Record<string, string | undefined> {
 // Parse a single line of stream-json output
 // ---------------------------------------------------------------------------
 
-export function parseStreamLine(line: string): ClaudeStreamEvent | null {
+export function parseStreamLine(line: string): ClaudeStreamEvent[] {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return [];
 
   let event: Record<string, unknown>;
   try {
     event = JSON.parse(trimmed);
   } catch {
-    return null;
+    return [];
   }
 
   const type = typeof event.type === "string" ? event.type : "";
 
   // system/init
   if (type === "system" && event.subtype === "init") {
-    return {
+    return [{
       type: "init",
       sessionId: typeof event.session_id === "string" ? event.session_id : "",
       model: typeof event.model === "string" ? event.model : "",
-    };
+    }];
   }
 
-  // assistant message blocks
+  // assistant message blocks — return ALL content blocks (thinking + text + tool_use)
   if (type === "assistant") {
     const message = asRecord(event.message);
     const content = Array.isArray(message?.content) ? message.content : [];
@@ -109,14 +109,14 @@ export function parseStreamLine(line: string): ClaudeStreamEvent | null {
         });
       }
     }
-    // Return first event (caller gets one event per line; multi-block is rare)
-    return events[0] ?? null;
+    return events;
   }
 
   // user message (tool results)
   if (type === "user") {
     const message = asRecord(event.message);
     const content = Array.isArray(message?.content) ? message.content : [];
+    const events: ClaudeStreamEvent[] = [];
 
     for (const block of content) {
       const b = asRecord(block);
@@ -132,13 +132,14 @@ export function parseStreamLine(line: string): ClaudeStreamEvent | null {
           .join("\n");
       }
 
-      return {
+      events.push({
         type: "tool_result",
         toolUseId: typeof b.tool_use_id === "string" ? b.tool_use_id : "",
         content: text,
         isError: b.is_error === true,
-      };
+      });
     }
+    return events;
   }
 
   // result
@@ -154,15 +155,15 @@ export function parseStreamLine(line: string): ClaudeStreamEvent | null {
     const costRaw = event.total_cost_usd;
     const costUsd = typeof costRaw === "number" && Number.isFinite(costRaw) ? costRaw : null;
 
-    return {
+    return [{
       type: "result",
       text: typeof event.result === "string" ? event.result : "",
       usage,
       costUsd,
-    };
+    }];
   }
 
-  return null;
+  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -237,22 +238,22 @@ export function runClaude(opts: ClaudeRunOptions): Promise<ClaudeRunResult> {
         const line = lineBuffer.slice(0, newlineIdx);
         lineBuffer = lineBuffer.slice(newlineIdx + 1);
 
-        const event = parseStreamLine(line);
-        if (!event) continue;
+        const events = parseStreamLine(line);
+        for (const event of events) {
+          if (event.type === "init") {
+            sessionId = event.sessionId;
+            model = event.model;
+          } else if (event.type === "assistant") {
+            lastAssistantText = event.text;
+          } else if (event.type === "result") {
+            // result.text is the authoritative summary; fall back to last assistant text
+            lastAssistantText = event.text || lastAssistantText;
+            usage = event.usage;
+            costUsd = event.costUsd;
+          }
 
-        if (event.type === "init") {
-          sessionId = event.sessionId;
-          model = event.model;
-        } else if (event.type === "assistant") {
-          lastAssistantText = event.text;
-        } else if (event.type === "result") {
-          // result.text is the authoritative summary; fall back to last assistant text
-          lastAssistantText = event.text || lastAssistantText;
-          usage = event.usage;
-          costUsd = event.costUsd;
+          onEvent?.(event);
         }
-
-        onEvent?.(event);
       }
     });
 
