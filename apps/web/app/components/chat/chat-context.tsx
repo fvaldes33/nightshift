@@ -2,7 +2,7 @@ import { Chat } from "@ai-sdk/react";
 import type { NightshiftDataTypes, NightshiftMessage } from "@openralph/backend/tools/index";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
 import { createContext, useContext, useState } from "react";
-import { useExplorationStore } from "~/hooks/use-exploration-store";
+import { usePlanStore } from "~/hooks/use-plan-store";
 
 export interface SessionContext {
   id: string;
@@ -20,11 +20,7 @@ const ChatContext = createContext<ChatContextValue | undefined>(undefined);
 function createChatInstance(
   session: SessionContext,
   initialMessages: NightshiftMessage[],
-  onExplorationData: (data: {
-    status: "running" | "complete" | "error";
-    tool: string | null;
-    elapsed: number;
-  }) => void,
+  onPlanData: (data: { filePath: string; title: string; content: string }) => void,
 ) {
   return new Chat<NightshiftMessage>({
     id: session.id,
@@ -37,9 +33,9 @@ function createChatInstance(
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onData: (dataPart) => {
-      if (dataPart.type === "data-exploration") {
-        onExplorationData(
-          dataPart.data as Extract<NightshiftDataTypes, { type: "data-exploration" }>["data"],
+      if (dataPart.type === "data-plan") {
+        onPlanData(
+          dataPart.data as Extract<NightshiftDataTypes, { type: "data-plan" }>["data"],
         );
       }
     },
@@ -55,15 +51,10 @@ export function ChatProvider({
   initialMessages: NightshiftMessage[];
   children: React.ReactNode;
 }) {
-  const explorationUpdate = useExplorationStore((s) => s.update);
-  const explorationClear = useExplorationStore((s) => s.clear);
+  const planOpen = usePlanStore((s) => s.open);
   const [chat] = useState(() =>
     createChatInstance(session, initialMessages, (data) => {
-      explorationUpdate(data);
-      // Auto-clear after completion
-      if (data.status === "complete" || data.status === "error") {
-        setTimeout(() => explorationClear(), 3000);
-      }
+      planOpen(data);
     }),
   );
 

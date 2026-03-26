@@ -7,7 +7,6 @@ import { LoopHeader } from "~/components/loops/loop-header";
 import { LoopIteration } from "~/components/loops/loop-iteration";
 import { LoopProperties } from "~/components/loops/loop-properties";
 import { LoopPropertiesInline } from "~/components/loops/loop-properties-inline";
-import { useLoops } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -18,8 +17,7 @@ export default function Loop() {
   const params = useParams();
   const navigate = useNavigate();
   const repoId = params.repoId!;
-  const { collection: loopCollection } = useLoops({ repoId });
-
+  const utils = trpc.useUtils();
   const { data: loop, isLoading } = trpc.loop.get.useQuery({ id: params.loopId! });
   const { data: events } = trpc.loop.events.useQuery(
     { loopId: params.loopId! },
@@ -28,12 +26,18 @@ export default function Loop() {
 
   const iterations = useMemo(() => groupEventsByIteration(events ?? []), [events]);
 
-  if (isLoading || !loop) return null;
+  const deleteLoop = trpc.loop.delete.useMutation({
+    onSuccess: () => {
+      utils.loop.list.invalidate();
+      navigate(`/repos/${repoId}/loops`);
+    },
+  });
 
   function handleDelete() {
-    loopCollection.delete(loop!.id);
-    navigate(`/repos/${repoId}/loops`);
+    deleteLoop.mutate({ id: loop!.id });
   }
+
+  if (isLoading || !loop) return null;
 
   // Default open: the latest / currently running iteration
   const defaultOpen =

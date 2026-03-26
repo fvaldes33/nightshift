@@ -9,10 +9,10 @@ import {
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@openralph/ui/ai/reasoning";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@openralph/ui/ai/tool";
 import type { TextUIPart } from "ai";
-import { CheckIcon, ClipboardCopyIcon } from "lucide-react";
-import { memo, useCallback, useState } from "react";
+import { CheckIcon, ChevronDownIcon, ClipboardCopyIcon } from "lucide-react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { ClientOnly } from "../client-only";
-import { toolRenderMap, type AnyToolPart, type ToolPart } from "./tools";
+import { isPlanFilePart, PlanWriteTool, toolRenderMap, type AnyToolPart, type ToolPart } from "./tools";
 
 interface ChatMessageProps {
   message: NightshiftMessage;
@@ -43,7 +43,9 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
       <MessageContent>
         {message.parts.map((part, index) => {
           if (part.type === "text") {
-            return (
+            return isUser ? (
+              <TruncatedText key={index} text={part.text} />
+            ) : (
               <MessageResponse key={index} className="text-sm">
                 {part.text}
               </MessageResponse>
@@ -65,6 +67,12 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
 
           if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
             const toolPart = part as AnyToolPart;
+
+            // Plan file writes get a custom compact renderer
+            if (isPlanFilePart(toolPart)) {
+              return <PlanWriteTool key={index} part={toolPart} />;
+            }
+
             const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
             const CustomTool = toolRenderMap.get(toolType);
 
@@ -102,3 +110,36 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
     </Message>
   );
 });
+
+const TRUNCATE_LINES = 40;
+
+function TruncatedText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = useMemo(() => text.split("\n"), [text]);
+  const isTruncatable = lines.length > TRUNCATE_LINES;
+  const truncatedText = useMemo(
+    () => (isTruncatable && !expanded ? lines.slice(0, TRUNCATE_LINES).join("\n") : text),
+    [isTruncatable, expanded, lines, text],
+  );
+
+  return (
+    <div>
+      <div className={isTruncatable && !expanded ? "relative" : undefined}>
+        <MessageResponse className="text-sm">{truncatedText}</MessageResponse>
+        {isTruncatable && !expanded && (
+          <div className="from-background pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t" />
+        )}
+      </div>
+      {isTruncatable && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1 text-xs"
+        >
+          <ChevronDownIcon className={`size-3 ${expanded ? "rotate-180" : ""}`} />
+          {expanded ? "Show less" : `Show ${lines.length - TRUNCATE_LINES} more lines`}
+        </button>
+      )}
+    </div>
+  );
+}

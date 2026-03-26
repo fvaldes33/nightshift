@@ -1,7 +1,7 @@
 import { createUIMessageStream, type UIMessage } from "ai";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
-import { runClaude } from "../lib/claude-runner";
+import { runClaude, type ClaudeStreamEvent } from "../lib/claude-runner";
 import {
   collectPart,
   createAdapterState,
@@ -24,9 +24,9 @@ function buildSystemPrompt(session: StreamChatOptions["session"], branch: string
 Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${branch}
 
 Be conversational. When the user asks you to evaluate, explore, or plan something:
-1. Run your exploration, then present what you found in a clear summary.
-2. Discuss your findings and recommendations with the user.
-3. Wait for the user to confirm or adjust before taking action (e.g. creating tasks, writing code).
+1. Investigate the codebase, then present a clear summary.
+2. Write your plan to a plan file — the nightshift UI will display it in a side panel.
+3. Discuss findings with the user before taking action.
 
 Never batch-create tasks or make sweeping changes without checking in first. Work collaboratively — the user wants to be part of the decision-making, not just handed a finished result.
 
@@ -69,6 +69,7 @@ const CHAT_ALLOWED_TOOLS = [
   "Bash",
   "Glob",
   "Grep",
+  "Skill",
   "mcp__openralph__list_tasks",
   "mcp__openralph__get_task",
   "mcp__openralph__create_task",
@@ -112,11 +113,16 @@ export function streamChat({ session, message }: StreamChatOptions) {
       const systemPrompt = buildSystemPrompt(session, branch);
 
       const args: string[] = [
-        "--mcp-config", mcpConfig,
-        "--allowedTools", CHAT_ALLOWED_TOOLS,
-        "--disallowedTools", CHAT_DISALLOWED_TOOLS,
-        "--system-prompt", systemPrompt,
-        "--max-turns", "50",
+        "--mcp-config",
+        mcpConfig,
+        "--allowedTools",
+        CHAT_ALLOWED_TOOLS,
+        "--disallowedTools",
+        CHAT_DISALLOWED_TOOLS,
+        "--system-prompt",
+        systemPrompt,
+        "--max-turns",
+        "50",
       ];
 
       // Resume existing CLI session for multi-turn conversation
@@ -134,6 +140,43 @@ export function streamChat({ session, message }: StreamChatOptions) {
       writer.write({ type: "start-step" });
       adapterState.inStep = true;
 
+      // Detect plan file reads/writes in the event stream
+      const PLAN_PATH_RE = /(?:\.claude|\.nightshift)\/plans\/[^/]+\.md$/;
+      const pendingPlanReads = new Map<string, string>(); // toolUseId → filePath
+
+      function emitPlanData(filePath: string, content: string) {
+        writer.write({
+          type: "data-plan" as any,
+          id: "plan",
+          data: {
+            filePath,
+            title: filePath.split("/").pop()?.replace(/\.md$/, "") ?? "Plan",
+            content,
+          },
+          transient: true,
+        });
+      }
+
+      function detectPlanEvent(event: ClaudeStreamEvent) {
+        if (event.type === "tool_call") {
+          const input = event.input as Record<string, unknown>;
+          const filePath = input?.file_path;
+          if (typeof filePath !== "string" || !PLAN_PATH_RE.test(filePath)) return;
+
+          if (event.name === "Write") {
+            emitPlanData(filePath, typeof input.content === "string" ? input.content : "");
+          } else if (event.name === "Read" && event.toolUseId) {
+            pendingPlanReads.set(event.toolUseId, filePath);
+          }
+        } else if (event.type === "tool_result") {
+          const filePath = pendingPlanReads.get(event.toolUseId);
+          if (filePath && !event.isError) {
+            pendingPlanReads.delete(event.toolUseId);
+            emitPlanData(filePath, event.content);
+          }
+        }
+      }
+
       // Run Claude CLI
       const result = await runClaude({
         prompt: userText,
@@ -141,6 +184,7 @@ export function streamChat({ session, message }: StreamChatOptions) {
         timeoutSec: 600,
         args,
         onEvent: (event) => {
+          detectPlanEvent(event);
           writeClaudeEventToStream(event, writer, adapterState);
           collectPart(event, collectedParts);
         },

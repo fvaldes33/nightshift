@@ -22,7 +22,6 @@ import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-re
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { AppHeader } from "~/components/app-header";
-import { useDocs, useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -36,8 +35,9 @@ export default function DocsIndex() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
-  const { data: allDocs, collection: docCollection } = useDocs();
-  const { data: repos } = useRepos();
+  const utils = trpc.useUtils();
+  const { data: allDocs = [] } = trpc.doc.list.useQuery({});
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
 
   const docs =
     repoFilter === "all"
@@ -55,8 +55,12 @@ export default function DocsIndex() {
     },
   });
 
+  const deleteDoc = trpc.doc.delete.useMutation({
+    onSuccess: () => utils.doc.list.invalidate(),
+  });
+
   function handleDeleteDoc(id: string) {
-    docCollection.delete(id);
+    deleteDoc.mutate({ id });
     setDeleteId(null);
   }
 

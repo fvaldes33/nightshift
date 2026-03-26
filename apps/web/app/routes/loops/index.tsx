@@ -2,7 +2,7 @@ import { RepeatIcon } from "lucide-react";
 import { useParams } from "react-router";
 import { AppHeader } from "~/components/app-header";
 import { LoopListItem } from "~/components/loops/loop-list-item";
-import { useLoops } from "~/hooks/use-collection";
+import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
   return [{ title: "Loops — nightshift" }];
@@ -11,7 +11,7 @@ export function meta() {
 export default function Loops() {
   const params = useParams();
   const repoId = params.repoId!;
-  const { data: loops } = useLoops({ repoId });
+  const { data: loops = [] } = trpc.loop.list.useQuery({ repoId });
 
   if (loops.length === 0) {
     return (

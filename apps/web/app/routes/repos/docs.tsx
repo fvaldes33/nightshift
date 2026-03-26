@@ -13,7 +13,6 @@ import { Button } from "@openralph/ui/components/button";
 import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useDocs } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -27,17 +26,23 @@ export default function RepoDocs() {
   const navigate = useNavigate();
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
   const { data: repo, isLoading } = trpc.repo.get.useQuery({ id: params.repoId! });
-  const { data: docs, collection: docCollection } = useDocs({ repoId: params.repoId });
+  const { data: docs = [] } = trpc.doc.list.useQuery({ repoId: params.repoId });
 
   const createDoc = trpc.doc.create.useMutation({
     onSuccess: (doc) => {
+      utils.doc.list.invalidate();
       navigate(`/docs/${doc.id}`);
     },
   });
 
+  const deleteDoc = trpc.doc.delete.useMutation({
+    onSuccess: () => utils.doc.list.invalidate(),
+  });
+
   function handleDeleteDoc(id: string) {
-    docCollection.delete(id);
+    deleteDoc.mutate({ id });
     setDeleteId(null);
   }
 

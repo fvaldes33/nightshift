@@ -13,7 +13,6 @@ import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router";
 import { ClientOnly } from "~/components/client-only";
-import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -51,7 +50,7 @@ export default function DocEditorPage() {
   const params = useParams();
   const navigate = useNavigate();
   const { data: doc, isLoading } = trpc.doc.get.useQuery({ id: params.docId! });
-  const { data: repos } = useRepos();
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");

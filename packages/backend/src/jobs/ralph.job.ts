@@ -88,6 +88,7 @@ ralphIterationQueue.work(async (job) => {
       "Bash",
       "Glob",
       "Grep",
+      "Skill",
       "mcp__openralph__list_tasks",
       "mcp__openralph__get_task",
       "mcp__openralph__update_task",

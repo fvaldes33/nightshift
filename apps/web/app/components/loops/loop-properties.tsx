@@ -1,4 +1,5 @@
 import type { LoopGetOutput } from "@openralph/backend/types/loop.types";
+import { formatRelativeTime } from "@openralph/common/date-format";
 import { Badge } from "@openralph/ui/components/badge";
 import { Clipboard } from "@openralph/ui/components/clipboard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@openralph/ui/components/tooltip";
@@ -184,22 +185,9 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
 
       <TaskPropertyRow icon={<ClockIcon />} label="Updated">
         <span className="text-muted-foreground text-xs">
-          {formatRelativeTime(new Date(loop.updatedAt))}
+          {formatRelativeTime(loop.updatedAt)}
         </span>
       </TaskPropertyRow>
     </div>
   );
-}
-
-function formatRelativeTime(date: Date): string {
-  const now = Date.now();
-  const diff = now - date.getTime();
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }

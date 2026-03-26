@@ -2,8 +2,13 @@ import { Button } from "@openralph/ui/components/button";
 import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { AppHeader } from "~/components/app-header";
+import {
+  ImportClaudeSessions,
+  ImportClaudeSessionsDialog,
+  ImportClaudeSessionsDialogTrigger,
+} from "~/components/import-claude-sessions-dialog";
 import { SessionListItem } from "~/components/sessions/session-list-item";
-import { useSessions } from "~/hooks/use-collection";
+import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
   return [{ title: "Sessions — nightshift" }];
@@ -12,7 +17,7 @@ export function meta() {
 export default function Sessions() {
   const params = useParams();
   const repoId = params.repoId!;
-  const { data: sessions } = useSessions({ repoId });
+  const { data: sessions = [] } = trpc.session.list.useQuery({ repoId });
 
   if (sessions.length === 0) {
     return (
@@ -36,12 +41,18 @@ export default function Sessions() {
     <div className="flex h-full flex-col">
       <AppHeader
         actions={
-          <Button size="sm" className="h-7" asChild>
-            <Link to={`/repos/${repoId}/sessions/new`}>
-              <PlusIcon className="size-3.5" />
-              New
-            </Link>
-          </Button>
+          <>
+            <ImportClaudeSessions repoId={repoId}>
+              <ImportClaudeSessionsDialogTrigger>Import</ImportClaudeSessionsDialogTrigger>
+              <ImportClaudeSessionsDialog />
+            </ImportClaudeSessions>
+            <Button size="sm" className="h-7" asChild>
+              <Link to={`/repos/${repoId}/sessions/new`}>
+                <PlusIcon className="size-3.5" />
+                New
+              </Link>
+            </Button>
+          </>
         }
       >
         <h1 className="text-sm font-semibold">Sessions</h1>
@@ -50,11 +61,7 @@ export default function Sessions() {
       <div className="flex-1 overflow-auto">
         <div className="grid gap-1 p-4">
           {sessions.map((s) => (
-            <SessionListItem
-              key={s.id}
-              session={s}
-              to={`/repos/${repoId}/sessions/${s.id}`}
-            />
+            <SessionListItem key={s.id} session={s} to={`/repos/${repoId}/sessions/${s.id}`} />
           ))}
         </div>
       </div>

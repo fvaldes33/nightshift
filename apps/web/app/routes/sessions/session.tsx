@@ -57,7 +57,6 @@ import { Link, useNavigate, useParams } from "react-router";
 import { AppHeader } from "~/components/app-header";
 import { ChatView } from "~/components/chat/chat-view";
 import { CreatePRDialog } from "~/components/sessions/create-pr-dialog";
-import { useSessions } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 const prStatusColor: Record<string, string> = {
@@ -121,8 +120,7 @@ export default function Session() {
   const params = useParams();
   const navigate = useNavigate();
   const repoId = params.repoId!;
-  const { collection: sessionCollection } = useSessions({ repoId });
-
+  const utils = trpc.useUtils();
   const { data: session, isLoading } = trpc.session.get.useQuery({ id: params.sessionId! });
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -131,6 +129,12 @@ export default function Session() {
 
   const updateSession = trpc.session.update.useMutation();
   const pushMutation = trpc.session.push.useMutation();
+  const deleteSession = trpc.session.delete.useMutation({
+    onSuccess: () => {
+      utils.session.list.invalidate();
+      navigate(`/repos/${repoId}/sessions`);
+    },
+  });
 
   const { data: gitStatus } = trpc.session.gitStatus.useQuery(
     { id: params.sessionId! },
@@ -141,11 +145,9 @@ export default function Session() {
 
   const initialMessages = toUIMessages(session.messages);
   const workspaceReady = session.repo?.workspaceStatus === "ready";
-  const hasWorktree = session.repo?.localPath || session.repo?.cloneUrl;
 
   function handleDelete() {
-    sessionCollection.delete(session!.id);
-    navigate(`/repos/${repoId}/sessions`);
+    deleteSession.mutate({ id: session!.id });
   }
 
   function handleRename() {

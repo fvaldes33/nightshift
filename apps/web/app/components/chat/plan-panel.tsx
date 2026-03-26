@@ -1,16 +1,16 @@
 import { MarkdownContent } from "@openralph/ui/ai/markdown-content";
 import { XIcon } from "lucide-react";
-import { useArtifactStore } from "~/hooks/use-artifact-store";
+import { usePlanStore } from "~/hooks/use-plan-store";
 
-export function ArtifactPanel() {
-  const { artifact, close } = useArtifactStore();
+export function PlanPanel() {
+  const { plan, close } = usePlanStore();
 
-  if (!artifact) return null;
+  if (!plan) return null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">{artifact.title}</h2>
+        <h2 className="text-sm font-semibold">{plan.title}</h2>
         <button
           type="button"
           onClick={close}
@@ -20,7 +20,7 @@ export function ArtifactPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-auto p-6">
-        <MarkdownContent>{artifact.content}</MarkdownContent>
+        <MarkdownContent>{plan.content}</MarkdownContent>
       </div>
     </div>
   );

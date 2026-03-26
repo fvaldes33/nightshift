@@ -21,8 +21,6 @@ import {
 import { Button } from "@openralph/ui/components/button";
 import {
   CheckCircleIcon,
-  CirclePlayIcon,
-  DownloadIcon,
   ListChecksIcon,
   Loader2Icon,
   MessageSquareIcon,
@@ -35,12 +33,14 @@ import {
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { AppHeader } from "~/components/app-header";
-import { ImportClaudeSessionsDialog } from "~/components/import-claude-sessions-dialog";
+import {
+  ImportClaudeSessions,
+  ImportClaudeSessionsDialog,
+  ImportClaudeSessionsDialogTrigger,
+} from "~/components/import-claude-sessions-dialog";
 import { LoopListItem } from "~/components/loops/loop-list-item";
 import { SessionListItem } from "~/components/sessions/session-list-item";
 import { TaskListItem } from "~/components/tasks/task-list-item";
-import { TaskTable } from "~/components/task-table";
-import { useDocs, useLoops, useRepos, useSessions, useTasks } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -86,24 +86,27 @@ export default function RepoDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
+  const utils = trpc.useUtils();
   const { data: repo, isLoading } = trpc.repo.get.useQuery({ id: params.repoId! });
+  const { data: sessions = [] } = trpc.session.list.useQuery({ repoId: params.repoId });
+  const { data: tasks = [] } = trpc.task.list.useQuery({ repoId: params.repoId });
+  const { data: loops = [] } = trpc.loop.list.useQuery({ repoId: params.repoId });
+  const { data: docs = [] } = trpc.doc.list.useQuery({ repoId: params.repoId });
 
-  const { data: sessions } = useSessions({ repoId: params.repoId });
-  const { data: tasks } = useTasks({ repoId: params.repoId });
-  const { data: loops } = useLoops({ repoId: params.repoId });
-  const { data: docs } = useDocs({ repoId: params.repoId });
-  const { collection: repoCollection } = useRepos();
+  const deleteRepo = trpc.repo.delete.useMutation({
+    onSuccess: () => {
+      utils.repo.list.invalidate();
+      navigate("/repos");
+    },
+  });
 
   if (isLoading || !repo) return null;
 
   function handleDeleteRepo() {
-    repoCollection.delete(repo!.id);
-    navigate("/repos");
+    deleteRepo.mutate({ id: repo!.id });
   }
 
-  const activeLoops = loops.filter(
-    (l) => l.status === "running" || l.status === "queued",
-  );
+  const activeLoops = loops.filter((l) => l.status === "running" || l.status === "queued");
 
   return (
     <div className="flex flex-col overflow-auto">
@@ -117,7 +120,7 @@ export default function RepoDetail() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-7 text-destructive-foreground"
+              className="text-destructive-foreground size-7"
               onClick={() => setDeleteOpen(true)}
             >
               <TrashIcon className="size-3.5" />
@@ -134,165 +137,144 @@ export default function RepoDetail() {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{repo.owner}/{repo.name}</BreadcrumbPage>
+              <BreadcrumbPage>
+                {repo.owner}/{repo.name}
+              </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
       </AppHeader>
 
       <div className="flex flex-col gap-6 p-4 sm:p-6">
-      {repo.workspaceStatus === "failed" && repo.workspaceError && (
-        <p className="text-destructive-foreground text-xs">{repo.workspaceError}</p>
-      )}
+        {repo.workspaceStatus === "failed" && repo.workspaceError && (
+          <p className="text-destructive-foreground text-xs">{repo.workspaceError}</p>
+        )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Link
-          to={`/repos/${repo.id}/sessions/new`}
-          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
-        >
-          <MessageSquareIcon className="size-4 text-muted-foreground shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold tabular-nums">{sessions.length}</span>
-            <span className="text-xs text-muted-foreground">Sessions</span>
-          </div>
-        </Link>
-        <Link
-          to={`/repos/${repo.id}/tasks`}
-          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
-        >
-          <ListChecksIcon className="size-4 text-muted-foreground shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold tabular-nums">{tasks.length}</span>
-            <span className="text-xs text-muted-foreground">Tasks</span>
-          </div>
-        </Link>
-        <Link
-          to={`/repos/${repo.id}/loops`}
-          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
-        >
-          <RepeatIcon className="size-4 text-muted-foreground shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold tabular-nums">{activeLoops.length}</span>
-            <span className="text-xs text-muted-foreground">Active Loops</span>
-          </div>
-        </Link>
-        <Link
-          to={`/repos/${repo.id}/docs`}
-          className="flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 hover:bg-accent/50 transition-colors"
-        >
-          <NotebookTextIcon className="size-4 text-muted-foreground shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold tabular-nums">{docs.length}</span>
-            <span className="text-xs text-muted-foreground">Docs</span>
-          </div>
-        </Link>
-      </div>
-
-      {/* Recent Sessions */}
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-            Recent Sessions
-          </h2>
-          <div className="flex-1" />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setImportOpen(true)}
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Link
+            to={`/repos/${repo.id}/sessions/new`}
+            className="border-border/50 bg-card hover:bg-accent/50 flex items-center gap-3 rounded-lg border p-3 transition-colors"
           >
-            <DownloadIcon className="size-3.5" />
-            Import
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-            <Link to={`/repos/${repo.id}/sessions/new`}>
-              <PlusIcon className="size-3.5" />
-              New
-            </Link>
-          </Button>
+            <MessageSquareIcon className="text-muted-foreground size-4 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold tabular-nums">{sessions.length}</span>
+              <span className="text-muted-foreground text-xs">Sessions</span>
+            </div>
+          </Link>
+          <Link
+            to={`/repos/${repo.id}/tasks`}
+            className="border-border/50 bg-card hover:bg-accent/50 flex items-center gap-3 rounded-lg border p-3 transition-colors"
+          >
+            <ListChecksIcon className="text-muted-foreground size-4 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold tabular-nums">{tasks.length}</span>
+              <span className="text-muted-foreground text-xs">Tasks</span>
+            </div>
+          </Link>
+          <Link
+            to={`/repos/${repo.id}/loops`}
+            className="border-border/50 bg-card hover:bg-accent/50 flex items-center gap-3 rounded-lg border p-3 transition-colors"
+          >
+            <RepeatIcon className="text-muted-foreground size-4 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold tabular-nums">{activeLoops.length}</span>
+              <span className="text-muted-foreground text-xs">Active Loops</span>
+            </div>
+          </Link>
+          <Link
+            to={`/repos/${repo.id}/docs`}
+            className="border-border/50 bg-card hover:bg-accent/50 flex items-center gap-3 rounded-lg border p-3 transition-colors"
+          >
+            <NotebookTextIcon className="text-muted-foreground size-4 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-lg font-semibold tabular-nums">{docs.length}</span>
+              <span className="text-muted-foreground text-xs">Docs</span>
+            </div>
+          </Link>
         </div>
-        {sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No sessions yet.</p>
-        ) : (
-          <div className="grid gap-1">
-            {sessions.slice(0, 10).map((s) => (
-              <SessionListItem
-                key={s.id}
-                session={s}
-                to={`/repos/${repo.id}/sessions/${s.id}`}
-                showRepo={false}
-              />
-            ))}
-          </div>
-        )}
-      </section>
 
-      {/* Tasks */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-          Tasks
-        </h2>
-        {tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No tasks yet.</p>
-        ) : (
-          <div className="grid gap-0.5">
-            {tasks.slice(0, 10).map((t) => (
-              <TaskListItem
-                key={t.id}
-                task={t}
-                to={`/repos/${repo.id}/tasks/${t.id}`}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Active Loops */}
-      {activeLoops.length > 0 && (
+        {/* Recent Sessions */}
         <section className="flex flex-col gap-3">
-          <h2 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-            Active Loops
-          </h2>
-          <div className="grid gap-0.5">
-            {activeLoops.map((loop) => (
-              <LoopListItem
-                key={loop.id}
-                loop={loop}
-                to={`/repos/${repo.id}/loops/${loop.id}`}
-              />
-            ))}
+          <div className="flex items-center gap-2">
+            <h2 className="text-muted-foreground font-mono text-xs uppercase tracking-wider">
+              Recent Sessions
+            </h2>
+            <div className="flex-1" />
+            <ImportClaudeSessions repoId={repo.id}>
+              <ImportClaudeSessionsDialogTrigger>Import</ImportClaudeSessionsDialogTrigger>
+              <ImportClaudeSessionsDialog />
+            </ImportClaudeSessions>
+            <Button variant="default" size="sm" className="h-7 text-xs" asChild>
+              <Link to={`/repos/${repo.id}/sessions/new`}>
+                <PlusIcon className="size-3.5" />
+                New
+              </Link>
+            </Button>
           </div>
+          {sessions.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No sessions yet.</p>
+          ) : (
+            <div className="grid gap-1">
+              {sessions.slice(0, 10).map((s) => (
+                <SessionListItem
+                  key={s.id}
+                  session={s}
+                  to={`/repos/${repo.id}/sessions/${s.id}`}
+                  showRepo={false}
+                />
+              ))}
+            </div>
+          )}
         </section>
-      )}
 
-      {/* Import Claude Sessions dialog */}
-      <ImportClaudeSessionsDialog
-        repoId={repo.id}
-        open={importOpen}
-        onOpenChange={setImportOpen}
-      />
+        {/* Tasks */}
+        <section className="flex flex-col gap-3">
+          <h2 className="text-muted-foreground font-mono text-[11px] uppercase tracking-wider">
+            Tasks
+          </h2>
+          {tasks.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No tasks yet.</p>
+          ) : (
+            <div className="grid gap-0.5">
+              {tasks.slice(0, 10).map((t) => (
+                <TaskListItem key={t.id} task={t} to={`/repos/${repo.id}/tasks/${t.id}`} />
+              ))}
+            </div>
+          )}
+        </section>
 
-      {/* Delete dialog */}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete repo?</AlertDialogTitle>
-            <AlertDialogDescription>
-              "{repo.owner}/{repo.name}" and all associated data will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={handleDeleteRepo}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {/* Active Loops */}
+        {activeLoops.length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-muted-foreground font-mono text-xs uppercase tracking-wider">
+              Active Loops
+            </h2>
+            <div className="grid gap-0.5">
+              {activeLoops.map((loop) => (
+                <LoopListItem key={loop.id} loop={loop} to={`/repos/${repo.id}/loops/${loop.id}`} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Delete dialog */}
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete repo?</AlertDialogTitle>
+              <AlertDialogDescription>
+                "{repo.owner}/{repo.name}" and all associated data will be permanently deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={handleDeleteRepo}>
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -8,7 +8,6 @@ import { TaskProperties } from "~/components/tasks/task-properties";
 import { TaskPropertiesInline } from "~/components/tasks/task-properties-inline";
 import { TaskSubtasks } from "~/components/tasks/task-subtasks";
 import { TaskTitle } from "~/components/tasks/task-title";
-import { useTasks } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
@@ -19,21 +18,32 @@ export default function TaskDetail() {
   const params = useParams();
   const navigate = useNavigate();
   const repoId = params.repoId!;
-  const { collection: taskCollection } = useTasks({ repoId });
+  const utils = trpc.useUtils();
 
   const { data: task, isLoading } = trpc.task.get.useQuery({ id: params.taskId! });
+
+  const updateTask = trpc.task.update.useMutation({
+    onSuccess: () => {
+      utils.task.get.invalidate({ id: params.taskId! });
+      utils.task.list.invalidate();
+    },
+  });
+
+  const deleteTask = trpc.task.delete.useMutation({
+    onSuccess: () => {
+      utils.task.list.invalidate();
+      navigate(`/repos/${repoId}/tasks`);
+    },
+  });
 
   if (isLoading || !task) return null;
 
   function handleUpdate(fields: Record<string, unknown>) {
-    taskCollection.update(task!.id, (draft: any) => {
-      Object.assign(draft, fields);
-    });
+    updateTask.mutate({ id: task!.id, ...fields });
   }
 
   function handleDelete() {
-    taskCollection.delete(task!.id);
-    navigate(`/repos/${repoId}/tasks`);
+    deleteTask.mutate({ id: task!.id });
   }
 
   const comments = (task.comments ?? []) as TaskComment[];

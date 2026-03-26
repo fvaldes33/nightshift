@@ -7,16 +7,16 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@o
 import { AppHeader } from "~/components/app-header";
 import { LoopListItem } from "~/components/loops/loop-list-item";
 import { SessionListItem } from "~/components/sessions/session-list-item";
-import { useLoops, useRepos, useSessions } from "~/hooks/use-collection";
+import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
   return [{ title: "Dashboard — nightshift" }];
 }
 
 export default function Dashboard() {
-  const { data: repos } = useRepos();
-  const { data: sessions } = useSessions();
-  const { data: loops } = useLoops();
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
+  const { data: sessions = [] } = trpc.session.list.useQuery({});
+  const { data: loops = [] } = trpc.loop.list.useQuery({});
   const activeLoops = loops.filter((l) => l.status === "running" || l.status === "queued");
 
   return (

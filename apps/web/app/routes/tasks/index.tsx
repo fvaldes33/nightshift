@@ -35,9 +35,8 @@ import { ListFilterMenu } from "~/components/list-filter-menu";
 import { statusConfig } from "~/components/task-columns";
 import { TaskTable } from "~/components/task-table";
 import { TaskListItem } from "~/components/tasks/task-list-item";
-import { useTasks } from "~/hooks/use-collection";
 import { useTableParams } from "~/hooks/use-table-params";
-import { taskCollection as taskCollectionSingleton } from "~/lib/collections";
+import { trpc } from "~/lib/trpc-react";
 
 // ── Form schema ──────────────────────────────────────────────────────────────
 
@@ -65,7 +64,7 @@ export default function Tasks() {
     filterKeys: ["status", "assignee"] as const,
   });
 
-  const { data: tasks, collection: taskCollection } = useTasks({
+  const { data: tasks = [] } = trpc.task.list.useQuery({
     repoId,
     status: filters.status,
     assignee: filters.assignee,
@@ -88,7 +87,7 @@ export default function Tasks() {
             New task
           </Button>
         </div>
-        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} taskCollection={taskCollection} />
+        <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} />
       </>
     );
   }
@@ -153,7 +152,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} taskCollection={taskCollection} />
+      <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} />
     </>
   );
 }
@@ -171,13 +170,20 @@ function CreateTaskDialog({
   open,
   onOpenChange,
   repoId,
-  taskCollection,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoId: string;
-  taskCollection: typeof taskCollectionSingleton;
 }) {
+  const utils = trpc.useUtils();
+  const createTask = trpc.task.create.useMutation({
+    onSuccess: () => {
+      utils.task.list.invalidate();
+      onOpenChange(false);
+      form.reset();
+    },
+  });
+
   const form = useForm<CreateTaskForm>({
     resolver: zodResolver(createTaskSchema),
     defaultValues: {
@@ -189,21 +195,14 @@ function CreateTaskDialog({
   });
 
   function onSubmit(values: CreateTaskForm) {
-    taskCollection.insert({
-      id: crypto.randomUUID(),
-      ...values,
+    createTask.mutate({
       repoId,
-      description: values.description?.trim() || null,
+      title: values.title,
+      description: values.description?.trim() || undefined,
+      status: values.status,
+      priority: values.priority,
       labels: [],
-      assignee: null,
-      parentId: null,
-      comments: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      subtasks: [],
-    } as any);
-    onOpenChange(false);
-    form.reset();
+    });
   }
 
   return (

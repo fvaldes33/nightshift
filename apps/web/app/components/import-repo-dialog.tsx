@@ -20,7 +20,6 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 export function ImportRepoDialog({
@@ -63,7 +62,7 @@ export function ImportRepoDialog({
 
 function GitHubTab({ onDone }: { onDone: () => void }) {
   const [search, setSearch] = useState("");
-  const { data: existingRepos } = useRepos();
+  const { data: existingRepos = [] } = trpc.repo.list.useQuery({});
   const existingNames = new Set(existingRepos.map((r) => `${r.owner}/${r.name}`));
 
   const { data: githubRepos, isLoading } = trpc.repo.listGitHub.useQuery({});

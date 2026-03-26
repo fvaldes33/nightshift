@@ -45,19 +45,24 @@ import {
 import { useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router";
 import { ImportRepoDialog } from "~/components/import-repo-dialog";
-import { useLoops, useRepos, useSessions, useTasks } from "~/hooks/use-collection";
+import { trpc } from "~/lib/trpc-react";
 
 type RepoItem = { id: string; owner: string; name: string };
 
 export function WorkspaceNav() {
-  const { data: repos, collection: repoCollection } = useRepos();
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
+  const utils = trpc.useUtils();
   const navigate = useNavigate();
   const params = useParams();
   const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RepoItem | null>(null);
 
+  const deleteRepo = trpc.repo.delete.useMutation({
+    onSuccess: () => utils.repo.list.invalidate(),
+  });
+
   function handleDelete(id: string) {
-    repoCollection.delete(id);
+    deleteRepo.mutate({ id });
     setDeleteTarget(null);
     if (params.repoId === id) {
       navigate("/repos");
@@ -119,9 +124,9 @@ function WorkspaceItem({
   repo: RepoItem;
   onDeleteRequest: () => void;
 }) {
-  const { data: sessions } = useSessions({ repoId: repo.id });
-  const { data: tasks } = useTasks({ repoId: repo.id });
-  const { data: loops } = useLoops({ repoId: repo.id });
+  const { data: sessions = [] } = trpc.session.list.useQuery({ repoId: repo.id });
+  const { data: tasks = [] } = trpc.task.list.useQuery({ repoId: repo.id });
+  const { data: loops = [] } = trpc.loop.list.useQuery({ repoId: repo.id });
 
   const runningLoops = loops.filter((l) => l.status === "running" || l.status === "queued");
   const prefix = `/repos/${repo.id}`;

@@ -31,6 +31,7 @@ interface JsonlRecord {
   uuid: string;
   timestamp: string;
   sessionId: string;
+  isMeta?: boolean;
   message?: {
     role: string;
     content: string | ContentBlock[];
@@ -151,8 +152,26 @@ claudeImportSessionQueue.work(async (job) => {
   // Build tool_use_id → tool_result map from user tool_result messages
   const toolResults = buildToolResultMap(records);
 
-  // Find first user text message for title
-  let title = "Imported session";
+  // Read all JSONL lines (including non-message records) for last-prompt
+  const allLines: Array<Record<string, unknown>> = [];
+  const stream2 = fs.createReadStream(filePath, { encoding: "utf-8" });
+  const rl2 = readline.createInterface({ input: stream2, crlfDelay: Infinity });
+  for await (const line of rl2) {
+    try {
+      allLines.push(JSON.parse(line));
+    } catch {
+      // skip
+    }
+  }
+  stream2.destroy();
+
+  // Find last-prompt line for a clean title
+  const lastPromptLine = allLines.find((l) => l.type === "last-prompt");
+  const lastPromptTitle =
+    typeof lastPromptLine?.lastPrompt === "string" ? lastPromptLine.lastPrompt.slice(0, 100) : null;
+
+  // Find first user text message for title fallback
+  let firstUserTitle: string | null = null;
   let model = "claude-sonnet-4-6";
   let earliestTimestamp = "";
   let latestTimestamp = "";
@@ -160,15 +179,28 @@ claudeImportSessionQueue.work(async (job) => {
   for (const record of records) {
     if (!record.message) continue;
 
-    // Extract title from first user text message
-    if (record.message.role === "user" && title === "Imported session") {
+    // Extract title from first real user text message, skip meta/system messages
+    if (record.message.role === "user" && !firstUserTitle && !record.isMeta) {
       const content = record.message.content;
+      let raw: string | null = null;
       if (typeof content === "string" && content.length > 0) {
-        title = content.slice(0, 100);
+        raw = content;
       } else if (Array.isArray(content)) {
         const textBlock = content.find((b) => b.type === "text" && b.text);
-        if (textBlock?.text) {
-          title = textBlock.text.slice(0, 100);
+        if (textBlock?.text) raw = textBlock.text;
+      }
+      if (raw) {
+        // Strip XML tags, [bracketed system text], and leading whitespace/dashes
+        const cleaned = raw
+          .replace(/<[^>]+>.*?<\/[^>]+>/gs, "")  // remove full XML elements
+          .replace(/<[^>]+>/g, "")                 // remove self-closing / orphan tags
+          .replace(/\[Request interrupted[^\]]*\]/g, "")
+          .replace(/[\n\r]+/g, " ")
+          .replace(/^[\s\-]+/, "")
+          .trim()
+          .slice(0, 100);
+        if (cleaned.length > 0) {
+          firstUserTitle = cleaned;
         }
       }
     }
@@ -187,6 +219,8 @@ claudeImportSessionQueue.work(async (job) => {
     }
   }
 
+  const title = lastPromptTitle || firstUserTitle || "Imported session";
+
   // Determine status: active if latest timestamp within 3 days
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
   const status = latestTimestamp && new Date(latestTimestamp) > threeDaysAgo ? "active" : "archived";
@@ -204,6 +238,7 @@ claudeImportSessionQueue.work(async (job) => {
       status: status as "active" | "archived",
       workspaceMode: "local",
       createdAt: earliestTimestamp ? new Date(earliestTimestamp) : undefined,
+      updatedAt: latestTimestamp ? new Date(latestTimestamp) : undefined,
     })
     .returning();
 
@@ -221,7 +256,7 @@ claudeImportSessionQueue.work(async (job) => {
   }> = [];
 
   for (const record of records) {
-    if (!record.message) continue;
+    if (!record.message || record.isMeta) continue;
     const { role, content } = record.message;
 
     if (role === "user") {

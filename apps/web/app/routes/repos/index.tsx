@@ -8,7 +8,7 @@ import { useNavigate } from "react-router";
 import { AppHeader } from "~/components/app-header";
 import { DataTable } from "~/components/data-table";
 import { ImportRepoDialog } from "~/components/import-repo-dialog";
-import { useRepos } from "~/hooks/use-collection";
+import { trpc } from "~/lib/trpc-react";
 
 // ── Columns ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ export default function Repos() {
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { data: repos } = useRepos();
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
 
   const table = useReactTable({
     data: repos,

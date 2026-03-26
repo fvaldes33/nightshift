@@ -18,12 +18,10 @@ import {
   ResizablePanelGroup,
 } from "@openralph/ui/components/resizable";
 import { MessageSquareIcon } from "lucide-react";
-import { useArtifactStore } from "~/hooks/use-artifact-store";
-import { useExplorationStore } from "~/hooks/use-exploration-store";
-import { ArtifactPanel } from "./artifact-panel";
+import { usePlanStore } from "~/hooks/use-plan-store";
 import { ChatProvider, type SessionContext, useChatContext } from "./chat-context";
 import { ChatMessage } from "./chat-message";
-import { ExplorationStream } from "./exploration-stream";
+import { PlanPanel } from "./plan-panel";
 
 interface ChatViewProps {
   session: SessionContext;
@@ -39,15 +37,9 @@ export function ChatView({ session, initialMessages }: ChatViewProps) {
 }
 
 function ChatViewInner() {
-  const artifact = useArtifactStore((s) => s.artifact);
-  const clearExploration = useExplorationStore((s) => s.clear);
+  const plan = usePlanStore((s) => s.plan);
   const { chat } = useChatContext();
-  const { messages, sendMessage: rawSendMessage, status, stop } = useChat({ chat });
-
-  const sendMessage = (opts: Parameters<typeof rawSendMessage>[0]) => {
-    clearExploration();
-    rawSendMessage(opts);
-  };
+  const { messages, sendMessage, status, stop } = useChat({ chat });
 
   const isGenerating = status === "submitted" || status === "streaming";
 
@@ -62,16 +54,13 @@ function ChatViewInner() {
               icon={<MessageSquareIcon className="size-8" />}
             />
           ) : (
-            <>
-              {messages.map((message, index) => (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  status={index === messages.length - 1 && isGenerating ? status : "ready"}
-                />
-              ))}
-              <ExplorationStream />
-            </>
+            messages.map((message, index) => (
+              <ChatMessage
+                key={message.id}
+                message={message}
+                status={index === messages.length - 1 && isGenerating ? status : "ready"}
+              />
+            ))
           )}
         </ConversationContent>
         <ConversationScrollButton />
@@ -98,14 +87,14 @@ function ChatViewInner() {
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="size-full">
-      <ResizablePanel defaultSize={artifact ? 50 : 100} minSize={30}>
+      <ResizablePanel defaultSize={plan ? 50 : 100} minSize={30}>
         {chatPanel}
       </ResizablePanel>
-      {!artifact || (
+      {!plan || (
         <>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={50} minSize={25}>
-            <ArtifactPanel />
+            <PlanPanel />
           </ResizablePanel>
         </>
       )}

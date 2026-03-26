@@ -26,7 +26,6 @@ import {
 import { Loader2Icon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
 const startLoopSchema = z.object({
@@ -48,7 +47,7 @@ export function StartLoopDialog({
   repoId?: string;
   sessionId?: string;
 }) {
-  const { data: repos } = useRepos();
+  const { data: repos = [] } = trpc.repo.list.useQuery({});
 
   const form = useForm<StartLoopForm>({
     resolver: zodResolver(startLoopSchema),
