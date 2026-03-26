@@ -1,3 +1,5 @@
+import { claudeImportBulkQueue } from "./claude-import-bulk.job";
+import { claudeImportSessionQueue } from "./claude-import-session.job";
 import { ralphLoopQueue, ralphIterationQueue } from "./ralph.job";
 import { workspaceSetupQueue } from "./workspace.job";
 
@@ -6,5 +8,7 @@ export async function bootstrapQueues() {
   await ralphLoopQueue.init();
   await ralphIterationQueue.init();
   await workspaceSetupQueue.init();
+  await claudeImportBulkQueue.init();
+  await claudeImportSessionQueue.init();
   console.log("Job queues started");
 }
