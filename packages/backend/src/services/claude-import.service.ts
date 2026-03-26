@@ -59,6 +59,11 @@ async function parseSessionFile(filePath: string): Promise<ParsedSessionInfo | n
         const content = record.message.content;
         if (typeof content === "string" && content.length > 0) {
           firstMessage = content.slice(0, 200);
+        } else if (Array.isArray(content)) {
+          const textBlock = content.find((b: any) => b.type === "text" && b.text);
+          if (textBlock?.text) {
+            firstMessage = textBlock.text.slice(0, 200);
+          }
         }
       }
     } catch {
