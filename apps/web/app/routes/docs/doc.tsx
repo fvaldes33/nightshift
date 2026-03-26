@@ -1,5 +1,7 @@
 import { Button } from "@openralph/ui/components/button";
 import { Input } from "@openralph/ui/components/input";
+import { SidebarTrigger } from "@openralph/ui/components/sidebar";
+import { Separator } from "@openralph/ui/components/separator";
 import {
   Select,
   SelectContent,
@@ -159,7 +161,9 @@ export default function DocEditorPage() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="bg-background shrink-0 border-b px-4 py-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger />
+          <Separator orientation="vertical" className="mr-1 h-4" />
           <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={handleBack}>
             <ArrowLeft className="size-4" />
           </Button>

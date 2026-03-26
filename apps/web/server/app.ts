@@ -4,10 +4,12 @@ import { bootstrapQueues } from "@openralph/backend/jobs/index";
 import { ActorContext } from "@openralph/backend/lib/context";
 import { appRouter } from "@openralph/backend/routers/index";
 import { streamChat } from "@openralph/backend/services/ai.service";
+import { createMessage } from "@openralph/backend/services/message.service";
 import { getSession } from "@openralph/backend/services/session.service";
 import { createRequestHandler } from "@react-router/express";
 import * as trpcExpress from "@trpc/server/adapters/express";
-import { pipeUIMessageStreamToResponse, type UIMessage } from "ai";
+import { createUIMessageStream, pipeUIMessageStreamToResponse, type UIMessage } from "ai";
+import { v4 as uuidv4 } from "uuid";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import express from "express";
 
@@ -61,6 +63,44 @@ app.post("/api/chat", async (req, res) => {
   await ActorContext.with(
     { type: "user", properties: { user: authSession.user } },
     async () => {
+      // Tool output patch from addToolOutput — persist and return an ack message
+      // to break the auto-send loop (lastAssistantMessageIsCompleteWithToolCalls
+      // stops when the last assistant message has no tool calls).
+      if (message.role === "assistant") {
+        await createMessage({
+          id: message.id,
+          sessionId,
+          role: "assistant",
+          parts: message.parts,
+        });
+
+        const ackId = uuidv4();
+        const textId = uuidv4();
+        const ackText = "Done.";
+
+        // Persist the ack so it survives page reloads
+        await createMessage({
+          id: ackId,
+          sessionId,
+          role: "assistant",
+          parts: [{ type: "text" as const, text: ackText, state: "done" as const }],
+        });
+
+        const stream = createUIMessageStream({
+          execute: async ({ writer }) => {
+            writer.write({ type: "start", messageId: ackId });
+            writer.write({ type: "start-step" });
+            writer.write({ type: "text-start", id: textId });
+            writer.write({ type: "text-delta", id: textId, delta: ackText });
+            writer.write({ type: "text-end", id: textId });
+            writer.write({ type: "finish-step" });
+            writer.write({ type: "finish", finishReason: "stop" });
+          },
+        });
+        pipeUIMessageStreamToResponse({ response: res, stream });
+        return;
+      }
+
       const session = await getSession({ id: sessionId });
       if (!session.repo || session.repo.workspaceStatus !== "ready") {
         res.status(400).json({ error: "Workspace is not ready" });

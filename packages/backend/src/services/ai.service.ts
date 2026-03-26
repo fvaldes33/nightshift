@@ -1,11 +1,4 @@
-import { createAnthropicLLM, createGroqLLM } from "@openralph/ai/models";
-import {
-  convertToModelMessages,
-  createUIMessageStream,
-  stepCountIs,
-  streamText,
-  type UIMessage,
-} from "ai";
+import { createUIMessageStream, type UIMessage } from "ai";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { runClaude } from "../lib/claude-runner";
@@ -14,10 +7,7 @@ import {
   createAdapterState,
   writeClaudeEventToStream,
 } from "../lib/claude-stream-adapter";
-import { AgentContext } from "../lib/context";
 import { ensureMcpConfig } from "../lib/mcp-config";
-import { allTools } from "../tools/index";
-import { getGitHubToken } from "./account.service";
 import { createMessage } from "./message.service";
 import { resolveSessionCwd, updateSession, type getSession } from "./session.service";
 
@@ -45,7 +35,9 @@ You have tools to explore the repo, create and manage tasks, and work with code.
 IMPORTANT: For git push and pull request operations, ALWAYS use the nightshift MCP tools instead of running git/gh commands directly:
 - Use mcp__openralph__push_changes (with sessionId: "${session.id}") instead of \`git push\`
 - Use mcp__openralph__create_pull_request (with sessionId: "${session.id}") instead of \`gh pr create\`
-These tools update the nightshift UI with PR status. Direct git/gh commands bypass nightshift tracking.`;
+These tools update the nightshift UI with PR status. Direct git/gh commands bypass nightshift tracking.
+
+When the user wants to start a coding loop, use the confirm_loop_details tool to present the config. The user will review and confirm in the nightshift UI before the loop starts.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,33 +59,7 @@ async function persistUserMessage(session: StreamChatOptions["session"], message
 }
 
 // ---------------------------------------------------------------------------
-// Shared: reconstruct UIMessages from DB messages for AI SDK path
-// ---------------------------------------------------------------------------
-
-function toUIMessages(session: Awaited<ReturnType<typeof getSession>>): UIMessage[] {
-  return session.messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
-      id: m.id,
-      role: m.role as "user" | "assistant",
-      parts: m.parts as UIMessage["parts"],
-      createdAt: m.createdAt,
-    }));
-}
-
-// ---------------------------------------------------------------------------
-// Main entry: branch by provider
-// ---------------------------------------------------------------------------
-
-export function streamChat(opts: StreamChatOptions) {
-  if (opts.session.provider === "anthropic") {
-    return streamChatWithClaude(opts);
-  }
-  return streamChatWithAISDK(opts);
-}
-
-// ---------------------------------------------------------------------------
-// Claude CLI path (zero-cost via Claude Max)
+// Chat streaming via Claude CLI
 // ---------------------------------------------------------------------------
 
 const CHAT_ALLOWED_TOOLS = [
@@ -109,8 +75,11 @@ const CHAT_ALLOWED_TOOLS = [
   "mcp__openralph__update_task",
   "mcp__openralph__add_task_comment",
   "mcp__openralph__get_session",
+  "mcp__openralph__list_loops",
+  "mcp__openralph__get_loop",
   "mcp__openralph__push_changes",
   "mcp__openralph__create_pull_request",
+  "mcp__openralph__confirm_loop_details",
 ].join(",");
 
 // Block git push/PR commands via Bash — force Claude to use MCP tools instead
@@ -121,7 +90,7 @@ const CHAT_DISALLOWED_TOOLS = [
   "Bash(gh api *)",
 ].join(",");
 
-function streamChatWithClaude({ session, message }: StreamChatOptions) {
+export function streamChat({ session, message }: StreamChatOptions) {
   return createUIMessageStream({
     execute: async ({ writer }) => {
       // Persist user message
@@ -146,7 +115,6 @@ function streamChatWithClaude({ session, message }: StreamChatOptions) {
         "--mcp-config", mcpConfig,
         "--allowedTools", CHAT_ALLOWED_TOOLS,
         "--disallowedTools", CHAT_DISALLOWED_TOOLS,
-        "--model", session.model,
         "--system-prompt", systemPrompt,
         "--max-turns", "50",
       ];
@@ -207,91 +175,6 @@ function streamChatWithClaude({ session, message }: StreamChatOptions) {
       if (result.error) {
         console.error("[ai.service] Claude CLI error:", result.error);
       }
-    },
-    onError: (error) => {
-      console.error("[ai.service]", error);
-      return "An error occurred while generating a response.";
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// AI SDK path (Groq / other API providers)
-// ---------------------------------------------------------------------------
-
-function streamChatWithAISDK({ session, message }: StreamChatOptions) {
-  return createUIMessageStream({
-    execute: async ({ writer }) => {
-      const githubToken = await getGitHubToken({});
-
-      // Persist user message
-      await persistUserMessage(session, message);
-
-      // Reconstruct full message history from DB + new message
-      const previousMessages = toUIMessages(session);
-      const messages = [...previousMessages, message];
-
-      // Resolve working directory
-      const resolved = await resolveSessionCwd(session);
-      const worktreePath = resolved?.cwd ?? null;
-      const branch = resolved?.branch ?? session.branch ?? "main";
-      const systemPrompt = buildSystemPrompt(session, branch);
-
-      const agentState = {
-        githubToken,
-        sessionId: session.id,
-        repoId: session.repoId,
-        repoOwner: session.repo?.owner ?? null,
-        repoName: session.repo?.name ?? null,
-        branch,
-        worktreePath,
-      };
-
-      const modelMessages = await convertToModelMessages(messages);
-
-      const groq = createGroqLLM();
-      const model = groq(session.model);
-
-      const result = AgentContext.with({ ...agentState, writer }, () =>
-        streamText({
-          model,
-          system: systemPrompt,
-          messages: modelMessages,
-          providerOptions: {
-            anthropic: {
-              thinking: { type: "enabled", budgetTokens: 10000 },
-            },
-          },
-          tools: allTools,
-          stopWhen: stepCountIs(10),
-        }),
-      );
-
-      const existingIds = new Set(messages.map((m) => m.id));
-
-      writer.merge(
-        result.toUIMessageStream({
-          generateMessageId: () => uuidv4(),
-          originalMessages: messages,
-          async onFinish({ messages: allMsgs }) {
-            for (const msg of allMsgs) {
-              if (existingIds.has(msg.id)) continue;
-
-              try {
-                const idParse = z.uuid().safeParse(msg.id);
-                await createMessage({
-                  ...(idParse.success ? { id: idParse.data } : {}),
-                  sessionId: session.id,
-                  role: msg.role,
-                  parts: msg.parts,
-                });
-              } catch (error) {
-                console.error("[ai.service] Failed to save assistant message:", error);
-              }
-            }
-          },
-        }),
-      );
     },
     onError: (error) => {
       console.error("[ai.service]", error);

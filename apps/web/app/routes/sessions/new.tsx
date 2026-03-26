@@ -1,4 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@openralph/ui/components/breadcrumb";
 import { insertSessionSchema } from "@openralph/db/models/index";
 import {
   ModelSelector,
@@ -9,7 +17,6 @@ import {
   ModelSelectorItem,
   ModelSelectorList,
   ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@openralph/ui/ai/model-selector";
@@ -28,8 +35,9 @@ import { ToggleGroup, ToggleGroupItem } from "@openralph/ui/components/toggle-gr
 import { CheckIcon, FolderIcon, GitForkIcon, Loader2Icon } from "lucide-react";
 import { memo, useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { z } from "zod";
+import { AppHeader } from "~/components/app-header";
 import { trpc } from "~/lib/trpc-react";
 
 function slugify(text: string): string {
@@ -40,7 +48,7 @@ function slugify(text: string): string {
 }
 
 const newSessionSchema = insertSessionSchema
-  .pick({ title: true, provider: true, model: true })
+  .pick({ title: true, model: true })
   .extend({
     workspaceMode: z.enum(["local", "worktree"]),
     branch: z.string().optional(),
@@ -54,14 +62,6 @@ const models = [
     chefSlug: "anthropic",
     id: "claude-sonnet-4-6",
     name: "Claude Sonnet 4.6",
-    providers: ["anthropic"],
-  },
-  {
-    chef: "Groq",
-    chefSlug: "groq",
-    id: "openai/gpt-oss-120b",
-    name: "GPT-OSS 120B",
-    providers: ["groq"],
   },
 ];
 
@@ -81,11 +81,6 @@ const ModelItem = memo(({ model, selectedModel, onSelect }: ModelItemProps) => {
     <ModelSelectorItem key={model.id} onSelect={handleSelect} value={model.id}>
       <ModelSelectorLogo provider={model.chefSlug} />
       <ModelSelectorName>{model.name}</ModelSelectorName>
-      <ModelSelectorLogoGroup>
-        {model.providers.map((provider) => (
-          <ModelSelectorLogo key={provider} provider={provider} />
-        ))}
-      </ModelSelectorLogoGroup>
       {selectedModel === model.id ? (
         <CheckIcon className="ml-auto size-4" />
       ) : (
@@ -110,7 +105,6 @@ export default function NewSession() {
     defaultValues: {
       title: "",
       workspaceMode: "local",
-      provider: "anthropic",
       model: "claude-sonnet-4-6",
       branch: "",
     },
@@ -138,7 +132,6 @@ export default function NewSession() {
         title: values.title,
         mode: "chat",
         workspaceMode: values.workspaceMode,
-        provider: values.provider,
         model: values.model,
         branch: values.workspaceMode === "worktree" ? (values.branch || null) : null,
       });
@@ -150,11 +143,24 @@ export default function NewSession() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-lg font-semibold">New Session</h1>
-        <p className="text-muted-foreground text-sm">Start a new coding session.</p>
-      </div>
+    <div className="flex flex-col overflow-auto">
+      <AppHeader>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem className="hidden sm:block">
+              <BreadcrumbLink asChild>
+                <Link to={`/repos/${repoId}/sessions`}>Sessions</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden sm:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>New Session</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </AppHeader>
+
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-6 p-4 sm:p-6">
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
@@ -263,11 +269,7 @@ export default function NewSession() {
                                     model={m}
                                     selectedModel={field.value ?? ""}
                                     onSelect={(id) => {
-                                      const model = models.find((x) => x.id === id);
-                                      if (model) {
-                                        field.onChange(id);
-                                        form.setValue("provider", model.providers[0]);
-                                      }
+                                      field.onChange(id);
                                       setModelOpen(false);
                                     }}
                                   />
@@ -290,6 +292,7 @@ export default function NewSession() {
           </Button>
         </form>
       </Form>
+      </div>
     </div>
   );
 }

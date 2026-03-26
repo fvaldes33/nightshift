@@ -8,4 +8,7 @@ export default defineConfig({
     noExternal: [/@uiw*/, /@codemirror*/],
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
+  server: {
+    allowedHosts: ["francos-macbook-pro.tail683835.ts.net"],
+  },
 });

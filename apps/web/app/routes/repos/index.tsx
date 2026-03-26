@@ -5,6 +5,7 @@ import { type ColumnDef, getCoreRowModel, getSortedRowModel, useReactTable } fro
 import { FolderGitIcon, Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { AppHeader } from "~/components/app-header";
 import { DataTable } from "~/components/data-table";
 import { ImportRepoDialog } from "~/components/import-repo-dialog";
 import { useRepos } from "~/hooks/use-collection";
@@ -85,17 +86,17 @@ export default function Repos() {
   return (
     <>
       <div className="flex h-full flex-col">
-        <div className="border-border flex shrink-0 flex-wrap items-center gap-2 border-b p-4">
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-muted-foreground hidden text-xs tabular-nums sm:inline">
-              {repos.length} repos
-            </span>
-            <Button size="sm" className="h-8" onClick={() => setDialogOpen(true)}>
+        <AppHeader
+          actions={
+            <Button size="sm" className="h-7" onClick={() => setDialogOpen(true)}>
               <Plus className="size-3.5" />
-              Import repo
+              Import
             </Button>
-          </div>
-        </div>
+          }
+        >
+          <h1 className="text-sm font-semibold">Repos</h1>
+          <span className="text-muted-foreground text-xs tabular-nums">{repos.length}</span>
+        </AppHeader>
 
         <DataTable table={table} onRowClick={(row) => navigate(`/repos/${row.id}`)} />
       </div>

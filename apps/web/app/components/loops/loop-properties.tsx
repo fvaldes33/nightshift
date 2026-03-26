@@ -2,7 +2,9 @@ import type { LoopGetOutput } from "@openralph/backend/types/loop.types";
 import { Badge } from "@openralph/ui/components/badge";
 import { Clipboard } from "@openralph/ui/components/clipboard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@openralph/ui/components/tooltip";
+import { Button } from "@openralph/ui/components/button";
 import {
+  ArrowRightIcon,
   CalendarIcon,
   CircleDotIcon,
   ClockIcon,
@@ -72,6 +74,13 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
               #{loop.session.prNumber}
             </a>
           </Clipboard>
+        ) : loop.status === "complete" && loop.session ? (
+          <Button variant="outline" size="sm" className="h-6 gap-1 text-[10px]" asChild>
+            <Link to={`/repos/${repoId}/sessions/${loop.session.id}`}>
+              Create PR
+              <ArrowRightIcon className="size-2.5" />
+            </Link>
+          </Button>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>
         )}

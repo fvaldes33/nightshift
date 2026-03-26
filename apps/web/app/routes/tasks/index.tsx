@@ -30,9 +30,11 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useParams } from "react-router";
 import { z } from "zod";
+import { AppHeader } from "~/components/app-header";
 import { ListFilterMenu } from "~/components/list-filter-menu";
 import { statusConfig } from "~/components/task-columns";
 import { TaskTable } from "~/components/task-table";
+import { TaskListItem } from "~/components/tasks/task-list-item";
 import { useTasks } from "~/hooks/use-collection";
 import { useTableParams } from "~/hooks/use-table-params";
 import { taskCollection as taskCollectionSingleton } from "~/lib/collections";
@@ -94,9 +96,16 @@ export default function Tasks() {
   return (
     <>
       <div className="flex h-full flex-col">
-        <div className="border-border flex shrink-0 flex-wrap items-center gap-2 border-b p-4">
+        <AppHeader
+          actions={
+            <Button size="sm" className="h-7" onClick={() => setDialogOpen(true)}>
+              <Plus className="size-3.5" />
+              New
+            </Button>
+          }
+        >
           <ListFilterMenu
-            className="h-8 text-xs"
+            className="h-7 text-xs"
             groups={[
               {
                 key: "status",
@@ -122,21 +131,26 @@ export default function Tasks() {
               setFilter("assignee", undefined);
             }}
           />
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-muted-foreground hidden text-xs tabular-nums sm:inline">
-              {tasks.length} tasks
-            </span>
-            <Button size="sm" className="h-8" onClick={() => setDialogOpen(true)}>
-              <Plus className="size-3.5" />
-              New task
-            </Button>
+          <span className="text-muted-foreground text-xs tabular-nums">{tasks.length}</span>
+        </AppHeader>
+
+        {/* Mobile: simple list */}
+        <div className="flex-1 overflow-auto sm:hidden">
+          <div className="grid gap-0.5 p-4">
+            {tasks.map((t) => (
+              <TaskListItem
+                key={t.id}
+                task={t}
+                to={`/repos/${repoId}/tasks/${t.id}`}
+              />
+            ))}
           </div>
-          <span className="text-muted-foreground w-full text-xs tabular-nums sm:hidden">
-            {tasks.length} tasks
-          </span>
         </div>
 
-        <TaskTable tasks={tasks} repoId={repoId} />
+        {/* Desktop: full table */}
+        <div className="hidden flex-1 overflow-auto sm:block">
+          <TaskTable tasks={tasks} repoId={repoId} />
+        </div>
       </div>
 
       <CreateTaskDialog open={dialogOpen} onOpenChange={setDialogOpen} repoId={repoId} taskCollection={taskCollection} />

@@ -1,7 +1,8 @@
-import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { AppHeader } from "~/components/app-header";
+import { SessionListItem } from "~/components/sessions/session-list-item";
 import { useSessions } from "~/hooks/use-collection";
 
 export function meta() {
@@ -33,36 +34,27 @@ export default function Sessions() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-border flex shrink-0 items-center gap-2 border-b p-4">
+      <AppHeader
+        actions={
+          <Button size="sm" className="h-7" asChild>
+            <Link to={`/repos/${repoId}/sessions/new`}>
+              <PlusIcon className="size-3.5" />
+              New
+            </Link>
+          </Button>
+        }
+      >
         <h1 className="text-sm font-semibold">Sessions</h1>
         <span className="text-muted-foreground text-xs tabular-nums">{sessions.length}</span>
-        <div className="flex-1" />
-        <Button size="sm" className="h-8" asChild>
-          <Link to={`/repos/${repoId}/sessions/new`}>
-            <PlusIcon className="size-3.5" />
-            New Session
-          </Link>
-        </Button>
-      </div>
+      </AppHeader>
       <div className="flex-1 overflow-auto">
         <div className="grid gap-1 p-4">
           {sessions.map((s) => (
-            <Link
+            <SessionListItem
               key={s.id}
+              session={s}
               to={`/repos/${repoId}/sessions/${s.id}`}
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-accent/50 transition-colors"
-            >
-              <MessageSquareIcon className="size-4 text-muted-foreground shrink-0" />
-              <span className="flex-1 truncate text-sm">{s.title}</span>
-              {s.branch && (
-                <Badge variant="secondary" className="font-mono text-[10px]">
-                  {s.branch}
-                </Badge>
-              )}
-              <Badge variant="outline" className="text-[10px] font-mono">
-                {s.mode}
-              </Badge>
-            </Link>
+            />
           ))}
         </div>
       </div>

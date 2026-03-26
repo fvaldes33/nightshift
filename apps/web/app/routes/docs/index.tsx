@@ -21,6 +21,7 @@ import {
 import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { AppHeader } from "~/components/app-header";
 import { useDocs, useRepos } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
@@ -68,40 +69,43 @@ export default function DocsIndex() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-auto p-6">
+    <div className="flex h-full flex-col overflow-auto">
+      <AppHeader
+        actions={
+          <Button
+            size="sm"
+            className="h-7"
+            onClick={handleCreate}
+            disabled={createDoc.isPending}
+          >
+            {createDoc.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Plus className="size-3.5" />
+            )}
+            New
+          </Button>
+        }
+      >
+        <h1 className="text-sm font-semibold">Docs</h1>
+        <Select value={repoFilter} onValueChange={setRepoFilter}>
+          <SelectTrigger className="h-7 w-[160px] text-xs">
+            <SelectValue placeholder="All docs" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All docs</SelectItem>
+            <SelectItem value="global">Global (no repo)</SelectItem>
+            {repos.map((r) => (
+              <SelectItem key={r.id} value={r.id}>
+                {r.owner}/{r.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </AppHeader>
+
+      <div className="flex-1 overflow-auto p-4 sm:p-6">
       <div className="mx-auto w-full max-w-2xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h3 className="text-sm font-medium">Docs</h3>
-          <div className="flex items-center gap-2">
-            <Select value={repoFilter} onValueChange={setRepoFilter}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
-                <SelectValue placeholder="All docs" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All docs</SelectItem>
-                <SelectItem value="global">Global (no repo)</SelectItem>
-                {repos.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.owner}/{r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              className="h-8"
-              onClick={handleCreate}
-              disabled={createDoc.isPending}
-            >
-              {createDoc.isPending ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <Plus className="size-3.5" />
-              )}
-              New
-            </Button>
-          </div>
-        </div>
 
         {docs.length > 0 ? (
           <div className="divide-border divide-y">
@@ -186,6 +190,7 @@ export default function DocsIndex() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      </div>
       </div>
     </div>
   );

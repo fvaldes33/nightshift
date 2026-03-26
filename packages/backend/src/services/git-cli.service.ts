@@ -72,6 +72,27 @@ export function gitUnpushedCount(cwd: string): number {
   return parseInt(count, 10) || 0;
 }
 
+export function gitLogOneline(cwd: string, base: string, maxCount = 50): string {
+  try {
+    return run(`git log --oneline ${base}..HEAD --max-count=${maxCount}`, cwd);
+  } catch {
+    // If base doesn't exist (e.g. no remote), fall back to recent commits
+    try {
+      return run(`git log --oneline -${maxCount}`, cwd);
+    } catch {
+      return "";
+    }
+  }
+}
+
+export function gitDiffStat(cwd: string, base: string): string {
+  try {
+    return run(`git diff --stat ${base}..HEAD`, cwd);
+  } catch {
+    return "";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Repo info (for linking existing local repos)
 // ---------------------------------------------------------------------------

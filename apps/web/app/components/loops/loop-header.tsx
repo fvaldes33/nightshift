@@ -9,7 +9,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@openralph/ui/components/alert-dialog";
-import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import {
   DropdownMenu,
@@ -18,7 +17,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@openralph/ui/components/dropdown-menu";
-import { Progress } from "@openralph/ui/components/progress";
 import {
   ArrowLeftIcon,
   CopyIcon,
@@ -28,13 +26,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-
-const statusColor: Record<string, string> = {
-  running: "bg-green-500",
-  queued: "bg-yellow-500",
-  complete: "bg-muted-foreground",
-  failed: "bg-destructive-foreground",
-};
 
 interface LoopHeaderProps {
   loop: LoopGetOutput;
@@ -57,14 +48,9 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
   const prNumber = session?.prNumber;
   const prStatus = session?.prStatus;
 
-  const progress =
-    loop.maxIterations > 0
-      ? (loop.currentIteration / loop.maxIterations) * 100
-      : 0;
-
   return (
     <>
-      <div className="border-border/50 flex items-center gap-2 border-b px-6 py-3">
+      <div className="border-border/50 flex items-center gap-2 border-b px-4 py-3 sm:px-6">
         <Button variant="ghost" size="icon" className="size-7" asChild>
           <Link to={loopsUrl}>
             <ArrowLeftIcon className="size-3.5" />
@@ -75,34 +61,20 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
           <Link to={loopsUrl} className="hover:text-foreground transition-colors">
             Loops
           </Link>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="text-foreground max-w-[300px] truncate">{loop.name}</span>
+          <span className="text-muted-foreground/50 hidden sm:inline">/</span>
+          <span className="text-foreground hidden max-w-[300px] truncate sm:inline">
+            {loop.name}
+          </span>
         </nav>
-
-        <Badge variant="secondary" className="gap-1.5 text-[10px]">
-          <span
-            className={`size-2 rounded-full ${statusColor[loop.status] ?? "bg-muted-foreground"}`}
-          />
-          {loop.status}
-        </Badge>
-
-        <span className="font-mono text-xs text-muted-foreground">
-          {loop.currentIteration}/{loop.maxIterations}
-        </span>
-        <Progress value={progress} className="h-1.5 w-16" />
 
         <div className="flex-1" />
 
         {prUrl && (
           <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
             <a href={prUrl} target="_blank" rel="noopener noreferrer">
-              <GitPullRequestIcon
-                className={`size-3 ${prStatusColor[prStatus ?? "open"]}`}
-              />
+              <GitPullRequestIcon className={`size-3 ${prStatusColor[prStatus ?? "open"]}`} />
               PR #{prNumber}
-              {prStatus && prStatus !== "open" && (
-                <span className="capitalize">{prStatus}</span>
-              )}
+              {prStatus && prStatus !== "open" && <span className="capitalize">{prStatus}</span>}
             </a>
           </Button>
         )}
@@ -114,9 +86,7 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(window.location.href)}
-            >
+            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(window.location.href)}>
               <CopyIcon className="size-3.5" />
               Copy link
             </DropdownMenuItem>

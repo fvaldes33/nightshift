@@ -1,24 +1,32 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-/** Client-side tool — no execute. The UI renders a confirmation card and calls
- *  the tRPC loop.start mutation. Result is fed back via addToolOutput. */
-export const start_loop = tool({
+/** Type-only tool definition — actual implementation is the MCP tool in ralph-server.ts.
+ *  This provides type safety for addToolOutput in the frontend. */
+export const confirm_loop_details = tool({
   description:
-    "Kick off Ralph's execution loop. Creates a loop record and queues it for processing. The user will review the loop configuration and confirm before it starts.",
+    "Present loop config for user confirmation. The user reviews and confirms in the nightshift UI.",
   inputSchema: z.object({
-    name: z.string().describe("Loop name for identification"),
-    maxIterations: z.number().int().default(10).describe("Maximum iterations before stopping"),
+    name: z.string().describe("Loop name"),
+    maxIterations: z.number().int().default(10).describe("Max iterations"),
     filterConfig: z
       .object({
         labels: z.array(z.string()).optional(),
         assignee: z.string().optional(),
       })
       .optional()
-      .describe("Filter which tasks Ralph should work on"),
+      .describe("Task filter config"),
   }),
   outputSchema: z.object({
-    action: z.enum(["started", "skipped"]),
+    action: z.enum(["pending", "confirmed", "rejected"]),
+    name: z.string(),
+    maxIterations: z.number().int(),
+    filterConfig: z
+      .object({
+        labels: z.array(z.string()).optional(),
+        assignee: z.string().optional(),
+      })
+      .optional(),
     loop: z
       .object({
         id: z.string(),

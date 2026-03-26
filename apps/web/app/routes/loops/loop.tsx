@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router";
 import { LoopHeader } from "~/components/loops/loop-header";
 import { LoopIteration } from "~/components/loops/loop-iteration";
 import { LoopProperties } from "~/components/loops/loop-properties";
+import { LoopPropertiesInline } from "~/components/loops/loop-properties-inline";
 import { useLoops } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
@@ -36,9 +37,7 @@ export default function Loop() {
 
   // Default open: the latest / currently running iteration
   const defaultOpen =
-    iterations.length > 0
-      ? [`iter-${iterations[iterations.length - 1].iteration}`]
-      : [];
+    iterations.length > 0 ? [`iter-${iterations[iterations.length - 1].iteration}`] : [];
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -47,14 +46,20 @@ export default function Loop() {
       <div className="flex min-h-0 flex-1">
         {/* Main content */}
         <div className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl space-y-6 px-12 py-6">
+          <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:px-12 sm:py-6">
+            {/* Title */}
+            <h1 className="text-lg font-semibold sm:hidden">{loop.name}</h1>
+
+            {/* Mobile: compact pill row */}
+            <div className="sm:hidden">
+              <LoopPropertiesInline loop={loop} repoId={repoId} />
+            </div>
+
             {/* Prompt */}
             {loop.prompt && (
-              <div className="rounded-lg border border-border/50 bg-muted/30 px-4 py-3">
-                <span className="text-muted-foreground mb-1 block text-xs font-medium">
-                  Prompt
-                </span>
-                <p className="text-sm whitespace-pre-wrap">{loop.prompt}</p>
+              <div className="border-border/50 bg-muted/30 rounded-lg border px-4 py-3">
+                <span className="text-muted-foreground mb-1 block text-xs font-medium">Prompt</span>
+                <p className="whitespace-pre-wrap text-sm">{loop.prompt}</p>
               </div>
             )}
 
@@ -66,16 +71,14 @@ export default function Loop() {
                     key={iteration}
                     iteration={iteration}
                     events={iterEvents}
-                    isActive={
-                      loop.status === "running" && iteration === loop.currentIteration
-                    }
+                    isActive={loop.status === "running" && iteration === loop.currentIteration}
                   />
                 ))}
               </Accordion>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <RepeatIcon className="size-8 text-muted-foreground/50 mb-3" />
-                <p className="text-sm text-muted-foreground">
+                <RepeatIcon className="text-muted-foreground/50 mb-3 size-8" />
+                <p className="text-muted-foreground text-sm">
                   {loop.status === "queued"
                     ? "Loop is queued. Events will appear when it starts running."
                     : "No events yet."}
@@ -85,8 +88,8 @@ export default function Loop() {
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="border-border/50 w-[280px] shrink-0 border-l overflow-y-auto">
+        {/* Desktop: sidebar */}
+        <div className="border-border/50 hidden w-[280px] shrink-0 overflow-y-auto border-l sm:block">
           <LoopProperties loop={loop} repoId={repoId} />
         </div>
       </div>

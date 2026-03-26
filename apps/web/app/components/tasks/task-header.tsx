@@ -34,7 +34,7 @@ export function TaskHeader({ task, repoId, onDelete, isDeleting }: TaskHeaderPro
 
   return (
     <>
-      <div className="border-border/50 flex items-center gap-2 border-b px-6 py-3">
+      <div className="border-border/50 flex items-center gap-2 border-b px-4 py-3 sm:px-6">
         <Button variant="ghost" size="icon" className="size-7" asChild>
           <Link to={tasksUrl}>
             <ArrowLeftIcon className="size-3.5" />
@@ -45,8 +45,10 @@ export function TaskHeader({ task, repoId, onDelete, isDeleting }: TaskHeaderPro
           <Link to={tasksUrl} className="hover:text-foreground transition-colors">
             Tasks
           </Link>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="text-foreground max-w-[300px] truncate">{task.title}</span>
+          <span className="text-muted-foreground/50 hidden sm:inline">/</span>
+          <span className="text-foreground hidden max-w-[300px] truncate sm:inline">
+            {task.title}
+          </span>
         </nav>
 
         <div className="flex-1" />
@@ -58,9 +60,7 @@ export function TaskHeader({ task, repoId, onDelete, isDeleting }: TaskHeaderPro
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(window.location.href)}
-            >
+            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(window.location.href)}>
               <CopyIcon className="size-3.5" />
               Copy link
             </DropdownMenuItem>
@@ -86,11 +86,7 @@ export function TaskHeader({ task, repoId, onDelete, isDeleting }: TaskHeaderPro
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={isDeleting}
-              onClick={onDelete}
-            >
+            <AlertDialogAction variant="destructive" disabled={isDeleting} onClick={onDelete}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

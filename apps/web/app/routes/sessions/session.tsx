@@ -34,7 +34,15 @@ import {
   TooltipTrigger,
 } from "@openralph/ui/components/tooltip";
 import {
-  AlertTriangleIcon,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@openralph/ui/components/breadcrumb";
+import {
+  ArrowUpIcon,
   CheckCircleIcon,
   CopyIcon,
   GitPullRequestIcon,
@@ -45,8 +53,10 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
+import { AppHeader } from "~/components/app-header";
 import { ChatView } from "~/components/chat/chat-view";
+import { CreatePRDialog } from "~/components/sessions/create-pr-dialog";
 import { useSessions } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
 
@@ -120,6 +130,12 @@ export default function Session() {
   const [renameValue, setRenameValue] = useState("");
 
   const updateSession = trpc.session.update.useMutation();
+  const pushMutation = trpc.session.push.useMutation();
+
+  const { data: gitStatus } = trpc.session.gitStatus.useQuery(
+    { id: params.sessionId! },
+    { enabled: !!session && !session.prUrl },
+  );
 
   if (isLoading || !session) return null;
 
@@ -141,87 +157,114 @@ export default function Session() {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto">
-      {/* Header */}
-      <div className="border-border/50 sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b bg-background px-6 py-3">
-        <h1 className="text-sm font-semibold">{session.title}</h1>
-        {session.repo && (
-          <Badge variant="outline" className="font-mono text-[10px]">
-            {session.repo.owner}/{session.repo.name}
-          </Badge>
-        )}
-        {session.branch && (
-          <Badge variant="secondary" className="font-mono text-[10px]">
-            {session.branch}
-          </Badge>
-        )}
-        {session.workspaceMode === "worktree" && (
-          <Badge variant="outline" className="text-[10px]">
-            worktree
-          </Badge>
-        )}
-        {!hasWorktree && (
-          <Tooltip>
-            <TooltipTrigger>
-              <Badge variant="outline" className="gap-1 text-[10px] text-yellow-500 border-yellow-500/30">
-                <AlertTriangleIcon className="size-3" />
-                No worktree
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent>
-              Repo has no local path or clone URL. Tools that access the filesystem won't work.
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        <div className="flex-1" />
-
-        {session.prUrl && (
-          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
-            <a href={session.prUrl} target="_blank" rel="noopener noreferrer">
-              <GitPullRequestIcon
-                className={`size-3 ${prStatusColor[session.prStatus ?? "open"]}`}
-              />
-              PR #{session.prNumber}
-              {session.prStatus && session.prStatus !== "open" && (
-                <span className="capitalize">{session.prStatus}</span>
-              )}
-            </a>
-          </Button>
-        )}
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-7">
-              <MoreHorizontalIcon className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(window.location.href)}
-            >
-              <CopyIcon className="size-3.5" />
-              Copy link
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setRenameValue(session.title);
-                setRenameOpen(true);
-              }}
-            >
-              <PencilIcon className="size-3.5" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <TrashIcon className="size-3.5" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <AppHeader
+        actions={
+          <>
+            {session.prUrl ? (
+              <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" asChild>
+                <a href={session.prUrl} target="_blank" rel="noopener noreferrer">
+                  <GitPullRequestIcon
+                    className={`size-3 ${prStatusColor[session.prStatus ?? "open"]}`}
+                  />
+                  PR #{session.prNumber}
+                  {session.prStatus && session.prStatus !== "open" && (
+                    <span className="capitalize">{session.prStatus}</span>
+                  )}
+                </a>
+              </Button>
+            ) : (
+              <>
+                {gitStatus && gitStatus.unpushedCount > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => pushMutation.mutate({ id: session.id })}
+                        disabled={pushMutation.isPending}
+                      >
+                        {pushMutation.isPending ? (
+                          <Loader2Icon className="size-3 animate-spin" />
+                        ) : (
+                          <ArrowUpIcon className="size-3" />
+                        )}
+                        Push
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {gitStatus.unpushedCount} unpushed commit{gitStatus.unpushedCount !== 1 ? "s" : ""}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                <CreatePRDialog
+                  sessionId={session.id}
+                  sessionTitle={session.title}
+                  defaultBranch={gitStatus?.defaultBranch ?? "main"}
+                  trigger={
+                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                      <GitPullRequestIcon className="size-3" />
+                      <span className="hidden sm:inline">Create PR</span>
+                    </Button>
+                  }
+                />
+              </>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-7">
+                  <MoreHorizontalIcon className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => navigator.clipboard.writeText(window.location.href)}
+                >
+                  <CopyIcon className="size-3.5" />
+                  Copy link
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setRenameValue(session.title);
+                    setRenameOpen(true);
+                  }}
+                >
+                  <PencilIcon className="size-3.5" />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <TrashIcon className="size-3.5" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      >
+        <Breadcrumb>
+          <BreadcrumbList>
+            {session.repo && (
+              <>
+                <BreadcrumbItem className="hidden sm:block">
+                  <BreadcrumbLink asChild>
+                    <Link to={`/repos/${session.repoId}`}>
+                      {session.repo.owner}/{session.repo.name}
+                    </Link>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden sm:block" />
+              </>
+            )}
+            <BreadcrumbItem>
+              <BreadcrumbPage className="truncate max-w-48">{session.title}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </AppHeader>
 
       {/* Content */}
       {workspaceReady ? (
