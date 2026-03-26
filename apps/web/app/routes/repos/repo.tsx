@@ -16,6 +16,7 @@ import {
   ArrowLeftIcon,
   CheckCircleIcon,
   CirclePlayIcon,
+  DownloadIcon,
   ListChecksIcon,
   Loader2Icon,
   MessageSquareIcon,
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { ImportClaudeSessionsDialog } from "~/components/import-claude-sessions-dialog";
 import { TaskTable } from "~/components/task-table";
 import { useDocs, useLoops, useRepos, useSessions, useTasks } from "~/hooks/use-collection";
 import { trpc } from "~/lib/trpc-react";
@@ -72,6 +74,7 @@ export default function RepoDetail() {
   const params = useParams();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data: repo, isLoading } = trpc.repo.get.useQuery({ id: params.repoId! });
 
@@ -177,6 +180,15 @@ export default function RepoDetail() {
             Recent Sessions
           </h2>
           <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setImportOpen(true)}
+          >
+            <DownloadIcon className="size-3.5" />
+            Import
+          </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
             <Link to={`/repos/${repo.id}/sessions/new`}>
               <PlusIcon className="size-3.5" />
@@ -251,6 +263,13 @@ export default function RepoDetail() {
           </div>
         </section>
       )}
+
+      {/* Import Claude Sessions dialog */}
+      <ImportClaudeSessionsDialog
+        repoId={repo.id}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+      />
 
       {/* Delete dialog */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
