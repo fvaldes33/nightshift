@@ -231,7 +231,7 @@ claudeImportSessionQueue.work(async (job) => {
         role: "user",
         parts,
         metadata: record.message.usage
-          ? { usage: record.message.usage }
+          ? { usage: record.message.usage, model: record.message.model }
           : null,
         createdAt: new Date(record.timestamp),
       });
@@ -244,7 +244,7 @@ claudeImportSessionQueue.work(async (job) => {
         role: "assistant",
         parts,
         metadata: record.message.usage
-          ? { usage: record.message.usage }
+          ? { usage: record.message.usage, model: record.message.model }
           : null,
         createdAt: new Date(record.timestamp),
       });
