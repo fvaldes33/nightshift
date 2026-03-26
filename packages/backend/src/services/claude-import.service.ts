@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { db } from "@openralph/db/config/database";
-import { eq, inArray } from "@openralph/db/drizzle";
+import { inArray } from "@openralph/db/drizzle";
 import { sessions } from "@openralph/db/models/index";
 import { z } from "zod";
 import { fn } from "../lib/fn";
@@ -86,48 +86,52 @@ async function parseSessionFile(filePath: string): Promise<ParsedSessionInfo | n
   };
 }
 
+const emptyResult = { total: 0, alreadyImported: 0, importable: 0, sessions: [] as ParsedSessionInfo[] };
+
+async function _discoverSessions(localPath: string) {
+  const projectDir = claudeProjectDir(localPath);
+
+  if (!fs.existsSync(projectDir)) return emptyResult;
+
+  // List top-level .jsonl files only (skip subdirectories)
+  const entries = fs.readdirSync(projectDir, { withFileTypes: true });
+  const jsonlFiles = entries
+    .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
+    .map((e) => path.join(projectDir, e.name));
+
+  if (jsonlFiles.length === 0) return emptyResult;
+
+  // Parse each file to extract session info
+  const parsed = await Promise.all(jsonlFiles.map(parseSessionFile));
+  const validSessions = parsed.filter((s): s is ParsedSessionInfo => s !== null);
+
+  if (validSessions.length === 0) return emptyResult;
+
+  // Cross-reference against DB to exclude already-imported sessions
+  const sessionIds = validSessions.map((s) => s.sessionId);
+  const existingSessions = await db
+    .select({ claudeSessionId: sessions.claudeSessionId })
+    .from(sessions)
+    .where(inArray(sessions.claudeSessionId, sessionIds));
+
+  const importedIds = new Set(existingSessions.map((s) => s.claudeSessionId));
+  const importable = validSessions.filter((s) => !importedIds.has(s.sessionId));
+
+  return {
+    total: validSessions.length,
+    alreadyImported: importedIds.size,
+    importable: importable.length,
+    sessions: importable,
+  };
+}
+
 export const discoverClaudeSessions = fn(
   z.object({ localPath: z.string() }),
   async ({ localPath }) => {
-    const projectDir = claudeProjectDir(localPath);
-
-    if (!fs.existsSync(projectDir)) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    // List top-level .jsonl files only (skip subdirectories)
-    const entries = fs.readdirSync(projectDir, { withFileTypes: true });
-    const jsonlFiles = entries
-      .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
-      .map((e) => path.join(projectDir, e.name));
-
-    if (jsonlFiles.length === 0) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    // Parse each file to extract session info
-    const parsed = await Promise.all(jsonlFiles.map(parseSessionFile));
-    const validSessions = parsed.filter((s): s is ParsedSessionInfo => s !== null);
-
-    if (validSessions.length === 0) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    // Cross-reference against DB to exclude already-imported sessions
-    const sessionIds = validSessions.map((s) => s.sessionId);
-    const existingSessions = await db
-      .select({ claudeSessionId: sessions.claudeSessionId })
-      .from(sessions)
-      .where(inArray(sessions.claudeSessionId, sessionIds));
-
-    const importedIds = new Set(existingSessions.map((s) => s.claudeSessionId));
-    const importable = validSessions.filter((s) => !importedIds.has(s.sessionId));
-
+    const result = await _discoverSessions(localPath);
     return {
-      total: validSessions.length,
-      alreadyImported: importedIds.size,
-      importable: importable.length,
-      sessions: importable.map(({ filePath: _fp, ...rest }) => rest),
+      ...result,
+      sessions: result.sessions.map(({ filePath: _fp, ...rest }) => rest),
     };
   },
 );
@@ -135,43 +139,5 @@ export const discoverClaudeSessions = fn(
 /** Exported for use by the import job — includes filePath. */
 export const discoverClaudeSessionsWithPaths = fn(
   z.object({ localPath: z.string() }),
-  async ({ localPath }) => {
-    const projectDir = claudeProjectDir(localPath);
-
-    if (!fs.existsSync(projectDir)) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    const entries = fs.readdirSync(projectDir, { withFileTypes: true });
-    const jsonlFiles = entries
-      .filter((e) => e.isFile() && e.name.endsWith(".jsonl"))
-      .map((e) => path.join(projectDir, e.name));
-
-    if (jsonlFiles.length === 0) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    const parsed = await Promise.all(jsonlFiles.map(parseSessionFile));
-    const validSessions = parsed.filter((s): s is ParsedSessionInfo => s !== null);
-
-    if (validSessions.length === 0) {
-      return { total: 0, alreadyImported: 0, importable: 0, sessions: [] };
-    }
-
-    const sessionIds = validSessions.map((s) => s.sessionId);
-    const existingSessions = await db
-      .select({ claudeSessionId: sessions.claudeSessionId })
-      .from(sessions)
-      .where(inArray(sessions.claudeSessionId, sessionIds));
-
-    const importedIds = new Set(existingSessions.map((s) => s.claudeSessionId));
-    const importable = validSessions.filter((s) => !importedIds.has(s.sessionId));
-
-    return {
-      total: validSessions.length,
-      alreadyImported: importedIds.size,
-      importable: importable.length,
-      sessions: importable,
-    };
-  },
+  async ({ localPath }) => _discoverSessions(localPath),
 );
