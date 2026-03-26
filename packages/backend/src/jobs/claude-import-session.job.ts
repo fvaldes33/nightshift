@@ -154,6 +154,7 @@ claudeImportSessionQueue.work(async (job) => {
   // Find first user text message for title
   let title = "Imported session";
   let model = "claude-sonnet-4-6";
+  let earliestTimestamp = "";
   let latestTimestamp = "";
 
   for (const record of records) {
@@ -177,7 +178,10 @@ claudeImportSessionQueue.work(async (job) => {
       model = record.message.model;
     }
 
-    // Track latest timestamp
+    // Track earliest and latest timestamps
+    if (!earliestTimestamp || record.timestamp < earliestTimestamp) {
+      earliestTimestamp = record.timestamp;
+    }
     if (record.timestamp > latestTimestamp) {
       latestTimestamp = record.timestamp;
     }
@@ -199,6 +203,7 @@ claudeImportSessionQueue.work(async (job) => {
       model,
       status: status as "active" | "archived",
       workspaceMode: "local",
+      createdAt: earliestTimestamp ? new Date(earliestTimestamp) : undefined,
     })
     .returning();
 
