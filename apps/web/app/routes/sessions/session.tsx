@@ -393,4 +393,3 @@ export default function Session() {
     </div>
   );
 }
-// test: verify push button visibility
