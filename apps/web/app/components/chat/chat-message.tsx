@@ -12,7 +12,13 @@ import type { TextUIPart } from "ai";
 import { CheckIcon, ChevronDownIcon, ClipboardCopyIcon } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import { ClientOnly } from "../client-only";
-import { isPlanFilePart, PlanWriteTool, toolRenderMap, type AnyToolPart, type ToolPart } from "./tools";
+import { isCompactToolPart, isPlanFilePart, PlanWriteTool, ToolCallGroup, toolRenderMap, type AnyToolPart, type ToolPart } from "./tools";
+
+type MessagePart = NightshiftMessage["parts"][number];
+
+type PartSegment =
+  | { kind: "single"; part: MessagePart; index: number }
+  | { kind: "tool-group"; parts: { part: AnyToolPart; index: number }[] };
 
 interface ChatMessageProps {
   message: NightshiftMessage;
@@ -36,67 +42,108 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
     .map((p) => p.text)
     .join("");
 
+  // Phase 1: Group consecutive compact tool parts into segments
+  const segments = useMemo(() => {
+    const result: PartSegment[] = [];
+    let currentGroup: { part: AnyToolPart; index: number }[] = [];
+
+    function flushGroup() {
+      if (currentGroup.length > 0) {
+        result.push({ kind: "tool-group", parts: currentGroup });
+        currentGroup = [];
+      }
+    }
+
+    for (let i = 0; i < message.parts.length; i++) {
+      const part = message.parts[i];
+      const isToolPart = part.type.startsWith("tool-") || part.type === "dynamic-tool";
+
+      if (isToolPart) {
+        const toolPart = part as AnyToolPart;
+        const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
+
+        if (isCompactToolPart(toolPart) && !isPlanFilePart(toolPart) && !toolRenderMap.has(toolType)) {
+          currentGroup.push({ part: toolPart, index: i });
+          continue;
+        }
+      }
+
+      flushGroup();
+      result.push({ kind: "single", part, index: i });
+    }
+    flushGroup();
+
+    return result;
+  }, [message.parts]);
+
+  // Phase 2: Render segments
+  function renderSinglePart(part: MessagePart, index: number) {
+    if (part.type === "text") {
+      return isUser ? (
+        <TruncatedText key={index} text={part.text} />
+      ) : (
+        <MessageResponse key={index} className="text-sm">
+          {part.text}
+        </MessageResponse>
+      );
+    }
+
+    if (part.type === "reasoning") {
+      return (
+        <ClientOnly key={index}>
+          {() => (
+            <Reasoning isStreaming={isStreaming && index === message.parts.length - 1}>
+              <ReasoningTrigger />
+              <ReasoningContent>{part.text}</ReasoningContent>
+            </Reasoning>
+          )}
+        </ClientOnly>
+      );
+    }
+
+    if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
+      const toolPart = part as AnyToolPart;
+
+      if (isPlanFilePart(toolPart)) {
+        return <PlanWriteTool key={index} part={toolPart} />;
+      }
+
+      const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
+      const CustomTool = toolRenderMap.get(toolType);
+
+      if (CustomTool) return <CustomTool key={index} part={toolPart as ToolPart} messageId={message.id} />;
+
+      return (
+        <Tool key={index}>
+          <ToolHeader
+            type={toolType}
+            state={toolPart.state}
+            title={toolType.replace("tool-", "")}
+          />
+          <ToolContent>
+            <ToolInput input={toolPart.input} />
+            <ToolOutput
+              output={"output" in toolPart && toolPart.output !== undefined ? toolPart.output : undefined}
+              errorText={toolPart.errorText}
+            />
+          </ToolContent>
+        </Tool>
+      );
+    }
+
+    return null;
+  }
+
   if (!isUser && !isAssistant) return null;
 
   return (
     <Message from={message.role}>
       <MessageContent>
-        {message.parts.map((part, index) => {
-          if (part.type === "text") {
-            return isUser ? (
-              <TruncatedText key={index} text={part.text} />
-            ) : (
-              <MessageResponse key={index} className="text-sm">
-                {part.text}
-              </MessageResponse>
-            );
+        {segments.map((segment, i) => {
+          if (segment.kind === "tool-group") {
+            return <ToolCallGroup key={segment.parts[0].index} parts={segment.parts} />;
           }
-
-          if (part.type === "reasoning") {
-            return (
-              <ClientOnly key={index}>
-                {() => (
-                  <Reasoning isStreaming={isStreaming && index === message.parts.length - 1}>
-                    <ReasoningTrigger />
-                    <ReasoningContent>{part.text}</ReasoningContent>
-                  </Reasoning>
-                )}
-              </ClientOnly>
-            );
-          }
-
-          if (part.type.startsWith("tool-") || part.type === "dynamic-tool") {
-            const toolPart = part as AnyToolPart;
-
-            // Plan file writes get a custom compact renderer
-            if (isPlanFilePart(toolPart)) {
-              return <PlanWriteTool key={index} part={toolPart} />;
-            }
-
-            const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
-            const CustomTool = toolRenderMap.get(toolType);
-
-            if (CustomTool) return <CustomTool key={index} part={toolPart as ToolPart} messageId={message.id} />;
-
-            return (
-              <Tool key={index}>
-                <ToolHeader
-                  type={toolType}
-                  state={toolPart.state}
-                  title={toolType.replace("tool-", "")}
-                />
-                <ToolContent>
-                  <ToolInput input={toolPart.input} />
-                  <ToolOutput
-                    output={"output" in toolPart && toolPart.output !== undefined ? toolPart.output : undefined}
-                    errorText={toolPart.errorText}
-                  />
-                </ToolContent>
-              </Tool>
-            );
-          }
-
-          return null;
+          return renderSinglePart(segment.part, segment.index);
         })}
       </MessageContent>
 
