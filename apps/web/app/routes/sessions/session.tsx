@@ -41,7 +41,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@openralph/ui/components/breadcrumb";
+import { toast } from "@openralph/ui/components/sonner";
 import {
+  ArrowLeftToLineIcon,
   ArrowUpIcon,
   CheckCircleIcon,
   CopyIcon,
@@ -126,9 +128,18 @@ export default function Session() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [handoffOpen, setHandoffOpen] = useState(false);
 
   const updateSession = trpc.session.update.useMutation();
   const pushMutation = trpc.session.push.useMutation();
+  const handoffMutation = trpc.session.handoff.useMutation({
+    onSuccess: () => {
+      utils.session.get.invalidate({ id: params.sessionId! });
+    },
+    onError: (err) => {
+      toast(err.message);
+    },
+  });
   const deleteSession = trpc.session.delete.useMutation({
     onSuccess: () => {
       utils.session.list.invalidate();
@@ -211,6 +222,22 @@ export default function Session() {
                   }
                 />
               </>
+            )}
+            {session.workspaceMode === "worktree" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => setHandoffOpen(true)}
+                disabled={handoffMutation.isPending}
+              >
+                {handoffMutation.isPending ? (
+                  <Loader2Icon className="size-3 animate-spin" />
+                ) : (
+                  <ArrowLeftToLineIcon className="size-3" />
+                )}
+                Handoff
+              </Button>
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -331,6 +358,27 @@ export default function Session() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Handoff dialog */}
+      <AlertDialog open={handoffOpen} onOpenChange={setHandoffOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Handoff worktree?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will checkout the branch in the main repo and remove the worktree. The session
+              will continue in local mode.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handoffMutation.mutate({ id: session.id })}
+            >
+              Handoff
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
