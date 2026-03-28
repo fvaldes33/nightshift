@@ -10,7 +10,7 @@ import { gitCurrentBranch, gitPush } from "../services/git-cli.service";
 import { createPullRequest, listPullRequests } from "../services/github.service";
 import { getLoop, listLoops, updateLoop } from "../services/loop.service";
 import { createMessage } from "../services/message.service";
-import { getSession, updateSession } from "../services/session.service";
+import { getSession, handoffSession, updateSession } from "../services/session.service";
 import {
   addTaskComment,
   createTask,
@@ -366,6 +366,32 @@ server.registerTool(
     return {
       content: [
         { type: "text", text: JSON.stringify({ url: pr.url, number: pr.number, created: true }) },
+      ],
+    };
+  },
+);
+
+// --- Worktree tools ---
+
+server.registerTool(
+  "handoff_worktree",
+  {
+    description:
+      "Handoff a worktree session back to the main repo checkout. Checks out the branch in the main repo, removes the worktree, and migrates the Claude session data. The session becomes local mode.",
+    inputSchema: { sessionId: z.uuid() },
+  },
+  async ({ sessionId }) => {
+    const result = await handoffSession(sessionId);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            handedOff: true,
+            sessionId: result.id,
+            workspaceMode: result.workspaceMode,
+          }),
+        },
       ],
     };
   },
