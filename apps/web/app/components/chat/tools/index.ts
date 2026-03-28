@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { CompactToolRenderer, COMPACT_TOOL_NAMES, isCompactToolPart } from "./compact-tool-renderers";
 import { ConfirmLoopDetailsTool } from "./confirm-loop-details-tool";
 import { PlanWriteTool } from "./plan-write-tool";
+import { ToolCallGroup } from "./tool-call-group";
 import type { AnyToolPart, ToolPart, ToolProps } from "./types";
 
 export type { AnyToolPart, ToolPart, ToolProps };
@@ -16,7 +17,7 @@ export function isPlanFilePart(part: AnyToolPart): boolean {
   return typeof input?.file_path === "string" && PLAN_PATH_RE.test(input.file_path);
 }
 
-export { CompactToolRenderer, COMPACT_TOOL_NAMES, isCompactToolPart, PlanWriteTool };
+export { CompactToolRenderer, COMPACT_TOOL_NAMES, isCompactToolPart, PlanWriteTool, ToolCallGroup };
 
 export const toolRenderMap = new Map<string, ComponentType<any>>([
   ["tool-mcp__openralph__confirm_loop_details", ConfirmLoopDetailsTool],
