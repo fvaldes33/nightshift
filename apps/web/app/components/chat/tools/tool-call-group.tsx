@@ -16,7 +16,7 @@ export function ToolCallGroup({ parts }: ToolCallGroupProps) {
 
   if (parts.length <= VISIBLE_THRESHOLD) {
     return (
-      <div className="rounded-md border">
+      <div className="divide-y divide-border/50 rounded-md border">
         {parts.map(({ part, index }) => (
           <CompactToolRenderer key={index} part={part} />
         ))}
@@ -30,7 +30,7 @@ export function ToolCallGroup({ parts }: ToolCallGroupProps) {
   const hiddenCount = middle.length;
 
   return (
-    <div className="rounded-md border">
+    <div className="divide-y divide-border/50 rounded-md border">
       {head.map(({ part, index }) => (
         <CompactToolRenderer key={index} part={part} />
       ))}

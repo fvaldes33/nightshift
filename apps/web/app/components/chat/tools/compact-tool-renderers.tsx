@@ -91,8 +91,11 @@ export function CompactToolRenderer({ part }: { part: AnyToolPart }) {
     <CompactTool>
       <CompactToolEntry>
         <CompactToolIcon>{Icon && <Icon />}</CompactToolIcon>
-        <CompactToolName>{toolName}</CompactToolName>
-        <CompactToolDetail>{description}</CompactToolDetail>
+        {description ? (
+          <CompactToolDetail>{description}</CompactToolDetail>
+        ) : (
+          <CompactToolName>{toolName}</CompactToolName>
+        )}
         <CompactToolStatus state={part.state} />
       </CompactToolEntry>
       <CompactToolContent>

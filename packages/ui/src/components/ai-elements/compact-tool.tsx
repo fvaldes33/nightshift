@@ -126,7 +126,7 @@ export const CompactToolContent = ({
 }: CompactToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground data-[state=closed]:animate-out data-[state=open]:animate-in w-full overflow-hidden outline-none",
+      "bg-muted/30 text-popover-foreground w-full overflow-hidden border-t border-border/50",
       className,
     )}
     {...props}

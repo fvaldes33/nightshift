@@ -12,6 +12,7 @@ import { repos, type Repo } from "@openralph/db/models/index";
 import {
   gitCheckout,
   gitClone,
+  gitCommitAndPush,
   gitFetchAll,
   gitIsDirty,
   gitWorktreeAdd,
@@ -145,7 +146,10 @@ export function isWorktreeHealthy(worktreePath: string): boolean {
 
 /**
  * Handoff a worktree session back to the main repo checkout.
- * Checks out the branch in the main repo, then removes the worktree.
+ * 1. Commits and pushes any uncommitted worktree changes
+ * 2. Removes the worktree (freeing the branch lock)
+ * 3. Checks out the branch in the main repo
+ *
  * Throws if the main repo has a dirty working tree.
  * Tolerates already-removed worktrees.
  */
@@ -160,13 +164,18 @@ export function handoffWorktree(
     );
   }
 
-  gitCheckout(repoDir, branch);
+  // Ensure all worktree changes are committed and pushed before removal
+  if (existsSync(worktreePath) && isGitRepo(worktreePath)) {
+    gitCommitAndPush(worktreePath, "chore: auto-commit before worktree handoff");
+  }
 
   try {
     gitWorktreeRemove({ repoDir, worktreePath });
   } catch {
     // Worktree already removed — nothing to clean up
   }
+
+  gitCheckout(repoDir, branch);
 }
 
 /**
