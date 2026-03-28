@@ -72,6 +72,12 @@ export function gitUnpushedCount(cwd: string): number {
   return parseInt(count, 10) || 0;
 }
 
+/** Count commits ahead of a base ref (e.g. origin/main). */
+export function gitAheadCount(cwd: string, base: string): number {
+  const count = run(`git rev-list --count ${base}..HEAD`, cwd);
+  return parseInt(count, 10) || 0;
+}
+
 export function gitLogOneline(cwd: string, base: string, maxCount = 50): string {
   try {
     return run(`git log --oneline ${base}..HEAD --max-count=${maxCount}`, cwd);

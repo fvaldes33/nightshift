@@ -9,6 +9,7 @@ import {
   discoverClaudeSessionsWithPaths,
 } from "../services/claude-import.service";
 import {
+  gitAheadCount,
   gitCurrentBranch,
   gitDefaultBranch,
   gitDiffStat,
@@ -81,14 +82,18 @@ export const sessionRouter = router({
     if (!resolved) return { branch: null, unpushedCount: 0, defaultBranch: "main" };
 
     const { cwd, branch } = resolved;
+    const defaultBranch = gitDefaultBranch(cwd);
     let unpushedCount = 0;
     try {
       unpushedCount = gitUnpushedCount(cwd);
     } catch {
-      // No upstream set (new branch) — count commits vs default branch
-      // This is fine, means no commits have been pushed yet
+      // No upstream set (new branch) — count commits ahead of default branch
+      try {
+        unpushedCount = gitAheadCount(cwd, `origin/${defaultBranch}`);
+      } catch {
+        // No remote at all
+      }
     }
-    const defaultBranch = gitDefaultBranch(cwd);
     return { branch, unpushedCount, defaultBranch };
   }),
 
