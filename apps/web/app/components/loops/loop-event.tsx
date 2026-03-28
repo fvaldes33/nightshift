@@ -1,19 +1,25 @@
 import type { LoopEvent } from "@openralph/db/models/loop-event.model";
+import {
+  CompactTool,
+  CompactToolContent,
+  CompactToolDetail,
+  CompactToolEntry,
+  CompactToolIcon,
+  CompactToolName,
+  CompactToolStatus,
+} from "@openralph/ui/ai/compact-tool";
 import { MarkdownContent } from "@openralph/ui/ai/markdown-content";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@openralph/ui/ai/reasoning";
+import { ToolInput, ToolOutput } from "@openralph/ui/ai/tool";
+import type { ToolPart as UIToolPart } from "@openralph/ui/ai/tool";
 import { Badge } from "@openralph/ui/components/badge";
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { useState } from "react";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@openralph/ui/components/collapsible";
-import {
-  CheckCircleIcon,
-  ChevronRightIcon,
-  Loader2Icon,
-  WrenchIcon,
-  XCircleIcon,
-} from "lucide-react";
+  descriptionExtractors,
+  getDisplayName,
+  toolIcons,
+} from "../chat/tools/compact-tool-renderers";
 
 // Event with optional paired tool result (attached by LoopIteration)
 export type ProcessedEvent = LoopEvent & {
@@ -30,8 +36,6 @@ export function LoopEventItem({ event }: { event: ProcessedEvent }) {
       return <AssistantEvent payload={payload} />;
     case "thinking":
       return <ThinkingEvent payload={payload} />;
-    case "tool_call":
-      return <ToolCallEvent payload={payload} pairedResult={event.pairedResult} />;
     case "result":
       return <ResultEvent payload={payload} />;
     default:
@@ -77,62 +81,109 @@ function ThinkingEvent({ payload }: { payload: Record<string, unknown> }) {
   );
 }
 
-// ── Tool Call (with paired result) ────────────────────────────────────────────
+// ── Tool Call (compact) ──────────────────────────────────────────────────────
 
-function ToolCallEvent({
-  payload,
-  pairedResult,
-}: {
-  payload: Record<string, unknown>;
-  pairedResult?: Record<string, unknown>;
-}) {
+function resolveToolState(
+  pairedResult?: Record<string, unknown>,
+): UIToolPart["state"] {
+  if (!pairedResult) return "input-available";
+  return pairedResult.isError ? "output-error" : "output-available";
+}
+
+export function LoopCompactTool({ event }: { event: ProcessedEvent }) {
+  const payload = event.payload as Record<string, unknown>;
   const name = (payload.name as string) ?? "unknown";
-  const input = payload.input;
-  const isError = pairedResult?.isError === true;
-  const hasResult = !!pairedResult;
+  const input = payload.input as Record<string, unknown> | undefined;
+  const Icon = toolIcons.get(name);
+  const label = getDisplayName(name);
+  const extractor = descriptionExtractors.get(name);
+  const description = extractor && input ? extractor(input) : "";
+  const state = resolveToolState(event.pairedResult);
+
+  const isError = event.pairedResult?.isError === true;
+  const resultContent = event.pairedResult
+    ? (event.pairedResult.content as string | undefined) ??
+      JSON.stringify(event.pairedResult)
+    : undefined;
 
   return (
-    <Collapsible className="rounded-md border">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-90" />
-        <WrenchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="font-medium">{name}</span>
-        <div className="flex-1" />
-        {hasResult ? (
-          isError ? (
-            <XCircleIcon className="size-3.5 text-destructive" />
-          ) : (
-            <CheckCircleIcon className="size-3.5 text-green-600" />
-          )
+    <CompactTool>
+      <CompactToolEntry>
+        <CompactToolIcon>{Icon && <Icon />}</CompactToolIcon>
+        {description ? (
+          <CompactToolDetail>{description}</CompactToolDetail>
         ) : (
-          <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+          <CompactToolName>{label}</CompactToolName>
         )}
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="border-t px-3 py-2.5">
-          <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Input
-          </span>
-          <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 p-2.5 font-mono text-xs leading-relaxed">
-            {typeof input === "string" ? input : JSON.stringify(input, null, 2)}
-          </pre>
-        </div>
-        {pairedResult && (
-          <div className="border-t px-3 py-2.5">
-            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {isError ? "Error" : "Output"}
-            </span>
-            <pre
-              className={`max-h-48 overflow-auto rounded-md p-2.5 font-mono text-xs leading-relaxed ${
-                isError ? "bg-destructive/10 text-destructive" : "bg-muted/50"
-              }`}
-            >
-              {(pairedResult.content as string) ?? JSON.stringify(pairedResult, null, 2)}
-            </pre>
-          </div>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
+        <CompactToolStatus state={state} />
+      </CompactToolEntry>
+      <CompactToolContent>
+        <ToolInput input={input} />
+        <ToolOutput
+          output={isError ? undefined : resultContent}
+          errorText={isError ? resultContent : undefined}
+        />
+      </CompactToolContent>
+    </CompactTool>
+  );
+}
+
+// ── Tool Call Group ──────────────────────────────────────────────────────────
+
+const VISIBLE_THRESHOLD = 6;
+const HEAD_COUNT = 3;
+const TAIL_COUNT = 3;
+
+export function LoopToolCallGroup({ events }: { events: ProcessedEvent[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (events.length <= VISIBLE_THRESHOLD) {
+    return (
+      <div className="divide-y divide-border/50 rounded-md border">
+        {events.map((event) => (
+          <LoopCompactTool key={event.id} event={event} />
+        ))}
+      </div>
+    );
+  }
+
+  const head = events.slice(0, HEAD_COUNT);
+  const middle = events.slice(HEAD_COUNT, events.length - TAIL_COUNT);
+  const tail = events.slice(events.length - TAIL_COUNT);
+  const hiddenCount = middle.length;
+
+  return (
+    <div className="divide-y divide-border/50 rounded-md border">
+      {head.map((event) => (
+        <LoopCompactTool key={event.id} event={event} />
+      ))}
+
+      {expanded &&
+        middle.map((event) => (
+          <LoopCompactTool key={event.id} event={event} />
+        ))}
+
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="flex w-full cursor-pointer items-center gap-2 py-1 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+      >
+        <span className="h-px flex-1 border-t border-dashed border-muted-foreground/30" />
+        <span className="flex items-center gap-1">
+          {expanded ? "collapse" : `${hiddenCount} more tools`}
+          {expanded ? (
+            <ChevronUpIcon className="size-3" />
+          ) : (
+            <ChevronDownIcon className="size-3" />
+          )}
+        </span>
+        <span className="h-px flex-1 border-t border-dashed border-muted-foreground/30" />
+      </button>
+
+      {tail.map((event) => (
+        <LoopCompactTool key={event.id} event={event} />
+      ))}
+    </div>
   );
 }
 

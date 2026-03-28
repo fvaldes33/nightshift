@@ -7,7 +7,7 @@ import {
 import { Badge } from "@openralph/ui/components/badge";
 import { CheckCircleIcon } from "lucide-react";
 import { useMemo } from "react";
-import { LoopEventItem, type ProcessedEvent } from "./loop-event";
+import { LoopEventItem, LoopToolCallGroup, type ProcessedEvent } from "./loop-event";
 
 interface LoopIterationProps {
   iteration: number;
@@ -55,6 +55,35 @@ export function LoopIteration({ iteration, events, isActive }: LoopIterationProp
     return { processedEvents: processed, resultEvent: result };
   }, [events]);
 
+  // Group consecutive tool_call events into segments
+  type EventSegment =
+    | { kind: "single"; event: ProcessedEvent }
+    | { kind: "tool-group"; events: ProcessedEvent[] };
+
+  const segments = useMemo(() => {
+    const result: EventSegment[] = [];
+    let currentGroup: ProcessedEvent[] = [];
+
+    function flushGroup() {
+      if (currentGroup.length > 0) {
+        result.push({ kind: "tool-group", events: currentGroup });
+        currentGroup = [];
+      }
+    }
+
+    for (const event of processedEvents) {
+      if (event.eventType === "tool_call") {
+        currentGroup.push(event);
+      } else {
+        flushGroup();
+        result.push({ kind: "single", event });
+      }
+    }
+    flushGroup();
+
+    return result;
+  }, [processedEvents]);
+
   const resultPayload = resultEvent?.payload as
     | { usage?: { inputTokens?: number; outputTokens?: number }; costUsd?: number }
     | undefined;
@@ -84,9 +113,19 @@ export function LoopIteration({ iteration, events, isActive }: LoopIterationProp
       </AccordionTrigger>
       <AccordionContent className="pb-4 pt-0">
         <div className="space-y-3 pl-5 border-l border-border/50 ml-[5px]">
-          {processedEvents.map((event) => (
-            <LoopEventItem key={event.id} event={event} />
-          ))}
+          {segments.map((segment, i) => {
+            if (segment.kind === "tool-group") {
+              return (
+                <LoopToolCallGroup
+                  key={segment.events[0].id}
+                  events={segment.events}
+                />
+              );
+            }
+            return (
+              <LoopEventItem key={segment.event.id} event={segment.event} />
+            );
+          })}
         </div>
       </AccordionContent>
     </AccordionItem>

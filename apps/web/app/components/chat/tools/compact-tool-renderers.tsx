@@ -92,11 +92,11 @@ const displayNames = new Map<string, string>([
   ["mcp__openralph__handoff_worktree", "Handoff Worktree"],
 ]);
 
-function getDisplayName(toolName: string): string {
+export function getDisplayName(toolName: string): string {
   return displayNames.get(toolName) ?? toolName;
 }
 
-const descriptionExtractors = new Map<
+export const descriptionExtractors = new Map<
   string,
   (input: Record<string, unknown>) => string
 >([
@@ -130,7 +130,7 @@ const descriptionExtractors = new Map<
   ["mcp__openralph__create_pull_request", (input) => String(input.title ?? "")],
 ]);
 
-const toolIcons = new Map<string, LucideIcon>([
+export const toolIcons = new Map<string, LucideIcon>([
   // Claude Code tools
   ["Bash", TerminalIcon],
   ["Read", FileIcon],
