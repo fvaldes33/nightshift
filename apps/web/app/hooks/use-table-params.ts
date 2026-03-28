@@ -118,6 +118,19 @@ export function useTableParams<const TFilterKeys extends readonly string[] = rea
     [updateParams],
   );
 
+  /** Toggle a single value within a comma-separated multi-select filter. */
+  const toggleFilter = useCallback(
+    (key: TFilterKeys[number], value: string) => {
+      const current = searchParams.get(key as string);
+      const values = current ? current.split(",") : [];
+      const next = values.includes(value)
+        ? values.filter((v) => v !== value)
+        : [...values, value];
+      updateParams({ [key]: next.length > 0 ? next.join(",") : undefined, page: undefined });
+    },
+    [searchParams, updateParams],
+  );
+
   // Object matching backend paginationSchema shape
   const queryInput = useMemo(
     () => ({
@@ -140,6 +153,7 @@ export function useTableParams<const TFilterKeys extends readonly string[] = rea
     onSortingChange,
     setSearch,
     setFilter,
+    toggleFilter,
     queryInput,
   };
 }

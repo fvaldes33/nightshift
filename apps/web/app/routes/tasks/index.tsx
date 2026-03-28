@@ -32,7 +32,7 @@ import { useParams } from "react-router";
 import { z } from "zod";
 import { AppHeader } from "~/components/app-header";
 import { ListFilterMenu } from "~/components/list-filter-menu";
-import { statusConfig } from "~/components/task-columns";
+import { priorityConfig, statusConfig } from "~/components/task-columns";
 import { TaskTable } from "~/components/task-table";
 import { TaskListItem } from "~/components/tasks/task-list-item";
 import { useTableParams } from "~/hooks/use-table-params";
@@ -60,17 +60,18 @@ export default function Tasks() {
   const repoId = params.repoId!;
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { filters, setFilter } = useTableParams({
-    filterKeys: ["status", "assignee"] as const,
+  const { filters, setFilter, toggleFilter } = useTableParams({
+    filterKeys: ["status", "priority", "assignee"] as const,
   });
 
   const { data: tasks = [] } = trpc.task.list.useQuery({
     repoId,
     status: filters.status,
+    priority: filters.priority,
     assignee: filters.assignee,
   });
 
-  const hasFilters = filters.status || filters.assignee;
+  const hasFilters = filters.status || filters.priority || filters.assignee;
   const isEmpty = tasks.length === 0 && !hasFilters;
 
   if (isEmpty) {
@@ -109,6 +110,7 @@ export default function Tasks() {
               {
                 key: "status",
                 label: "Status",
+                mode: "multi",
                 value: filters.status,
                 allLabel: "All statuses",
                 options: taskStatusEnum.enumValues.map((s) => ({
@@ -122,11 +124,34 @@ export default function Tasks() {
                     </span>
                   ),
                 })),
-                onChange: (value) => setFilter("status", value),
+                onToggle: (value) => toggleFilter("status", value),
+                onClear: () => setFilter("status", undefined),
+              },
+              {
+                key: "priority",
+                label: "Priority",
+                mode: "multi",
+                value: filters.priority,
+                allLabel: "All priorities",
+                options: Object.entries(priorityConfig).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+                onToggle: (value) => toggleFilter("priority", value),
+                onClear: () => setFilter("priority", undefined),
+              },
+              {
+                key: "assignee",
+                label: "Assignee",
+                mode: "text",
+                value: filters.assignee,
+                placeholder: "Filter by name...",
+                onChange: (value) => setFilter("assignee", value),
               },
             ]}
             onClearAll={() => {
               setFilter("status", undefined);
+              setFilter("priority", undefined);
               setFilter("assignee", undefined);
             }}
           />

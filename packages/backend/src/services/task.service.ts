@@ -15,15 +15,33 @@ export const listTasks = fn(
   z.object({
     repoId: z.uuid().optional(),
     status: z.string().optional(),
+    priority: z.string().optional(),
     assignee: z.string().optional(),
     parentId: z.uuid().nullable().optional(),
   }),
-  async ({ repoId, status, assignee, parentId }) => {
+  async ({ repoId, status, priority, assignee, parentId }) => {
+    // Support comma-separated multi-select for status
+    const statusValues = status
+      ? (status.split(",") as (typeof tasks.status.enumValues)[number][])
+      : undefined;
+
+    // Support comma-separated multi-select for priority
+    const priorityValues = priority ? priority.split(",").map(Number) : undefined;
+
     return db.query.tasks.findMany({
       where: and(
         repoId ? eq(tasks.repoId, repoId) : undefined,
-        status ? eq(tasks.status, status as (typeof tasks.status.enumValues)[number]) : undefined,
-        assignee ? ilike(tasks.assignee, assignee) : undefined,
+        statusValues
+          ? statusValues.length === 1
+            ? eq(tasks.status, statusValues[0]!)
+            : inArray(tasks.status, statusValues)
+          : undefined,
+        priorityValues
+          ? priorityValues.length === 1
+            ? eq(tasks.priority, priorityValues[0]!)
+            : inArray(tasks.priority, priorityValues)
+          : undefined,
+        assignee ? ilike(tasks.assignee, `%${assignee}%`) : undefined,
         parentId !== undefined
           ? parentId === null
             ? isNull(tasks.parentId)
