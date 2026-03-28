@@ -137,3 +137,14 @@ export function isGitRepo(path: string): boolean {
     return false;
   }
 }
+
+/** Check if the working tree has uncommitted changes. */
+export function gitIsDirty(cwd: string): boolean {
+  const status = run("git status --porcelain", cwd);
+  return status.length > 0;
+}
+
+/** Checkout a branch. */
+export function gitCheckout(cwd: string, branch: string): void {
+  runSilent(`git checkout ${branch}`, cwd);
+}

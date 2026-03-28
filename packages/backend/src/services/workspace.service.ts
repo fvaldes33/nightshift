@@ -1,13 +1,22 @@
-import { existsSync, mkdirSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+} from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { db } from "@openralph/db/config/database";
 import { eq } from "@openralph/db/drizzle";
 import { repos, type Repo } from "@openralph/db/models/index";
 import {
+  gitCheckout,
   gitClone,
   gitFetchAll,
+  gitIsDirty,
   gitWorktreeAdd,
   gitWorktreeRemove,
+  isGitRepo,
 } from "./git-cli.service";
 
 const BASE_DIR = process.env.NIGHTSHIFT_WORKSPACE_DIR ?? "/data/nightshift";
@@ -123,4 +132,93 @@ export function cleanupWorktree(opts: {
   const repoDir = join(REPOS_DIR, opts.owner, opts.name);
   removeWorktree({ repoDir, worktreePath: opts.worktreePath });
   gitFetchAll(repoDir);
+}
+
+// ---------------------------------------------------------------------------
+// Worktree handoff
+// ---------------------------------------------------------------------------
+
+/** Check if a worktree path exists and is a valid git working directory. */
+export function isWorktreeHealthy(worktreePath: string): boolean {
+  return existsSync(worktreePath) && isGitRepo(worktreePath);
+}
+
+/**
+ * Handoff a worktree session back to the main repo checkout.
+ * Checks out the branch in the main repo, then removes the worktree.
+ * Throws if the main repo has a dirty working tree.
+ * Tolerates already-removed worktrees.
+ */
+export function handoffWorktree(
+  repoDir: string,
+  worktreePath: string,
+  branch: string,
+): void {
+  if (gitIsDirty(repoDir)) {
+    throw new Error(
+      `Cannot handoff: main repo has uncommitted changes at ${repoDir}`,
+    );
+  }
+
+  gitCheckout(repoDir, branch);
+  gitWorktreeRemove({ repoDir, worktreePath });
+}
+
+/**
+ * Encode a cwd path the same way Claude Code encodes project directory names.
+ * Replaces `/` and `.` with `-`.
+ */
+function encodeClaudeProjectPath(cwd: string): string {
+  return cwd.replace(/[/.]/g, "-");
+}
+
+/**
+ * Migrate a Claude Code session from one project directory to another.
+ * Scans ~/.claude/projects/ to find the source directory, then copies
+ * the session JSONL file (and matching directory if present) to the target.
+ *
+ * Returns true on success, false if source not found.
+ */
+export function migrateClaudeSession(
+  fromCwd: string,
+  toCwd: string,
+  claudeSessionId: string,
+): boolean {
+  const claudeProjectsDir = join(homedir(), ".claude", "projects");
+  if (!existsSync(claudeProjectsDir)) return false;
+
+  const entries = readdirSync(claudeProjectsDir, { withFileTypes: true });
+  const encodedFrom = encodeClaudeProjectPath(fromCwd);
+  const encodedTo = encodeClaudeProjectPath(toCwd);
+
+  // Find source directory by matching the encoded path
+  const sourceEntry = entries.find(
+    (e) => e.isDirectory() && e.name === encodedFrom,
+  );
+  if (!sourceEntry) return false;
+
+  const sourceDir = join(claudeProjectsDir, sourceEntry.name);
+  const jsonlFile = `${claudeSessionId}.jsonl`;
+  const jsonlPath = join(sourceDir, jsonlFile);
+
+  if (!existsSync(jsonlPath)) return false;
+
+  // Find or create target directory
+  const targetDir = join(claudeProjectsDir, encodedTo);
+  if (!existsSync(targetDir)) {
+    mkdirSync(targetDir, { recursive: true });
+  }
+
+  // Copy the JSONL file
+  cpSync(jsonlPath, join(targetDir, jsonlFile));
+
+  // Copy matching directory if present (Claude stores additional session data)
+  const sessionDirPath = join(sourceDir, claudeSessionId);
+  if (existsSync(sessionDirPath)) {
+    cpSync(sessionDirPath, join(targetDir, claudeSessionId), {
+      recursive: true,
+    });
+  }
+
+  return true;
 }
