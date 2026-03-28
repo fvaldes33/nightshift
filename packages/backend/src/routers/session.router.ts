@@ -29,6 +29,7 @@ import {
   resolveSessionCwd,
   updateSession,
 } from "../services/session.service";
+import { discoverSessionCommands } from "../services/skill-discovery.service";
 
 export const sessionRouter = router({
   list: protectedProcedure.input(listSessions.schema).query(({ input }) => listSessions(input)),
@@ -82,6 +83,12 @@ export const sessionRouter = router({
     const resolved = await resolveSessionCwd(session);
     if (!resolved) return [];
     return gitListFiles(resolved.cwd);
+  }),
+
+  listCommands: protectedProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const session = await getSession(input);
+    const resolved = await resolveSessionCwd(session);
+    return discoverSessionCommands(resolved?.cwd ?? null);
   }),
 
   gitStatus: protectedProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {

@@ -1,5 +1,6 @@
 import { useChat } from "@ai-sdk/react";
 import type { NightshiftMessage } from "@openralph/backend/tools/index";
+import type { DiscoveredCommand } from "@openralph/backend/services/skill-discovery.service";
 import {
   Conversation,
   ConversationContent,
@@ -23,17 +24,6 @@ import { ChatMessage } from "./chat-message";
 import { PlanPanel } from "./plan-panel";
 
 // ---------------------------------------------------------------------------
-// Slash commands available in the prompt
-// ---------------------------------------------------------------------------
-
-const COMMAND_ITEMS: MentionItem[] = [
-  { label: "commit", value: "commit", type: "command", detail: "Create a git commit" },
-  { label: "review-pr", value: "review-pr", type: "command", detail: "Review a pull request" },
-  { label: "simplify", value: "simplify", type: "command", detail: "Review code for quality" },
-  { label: "loop", value: "loop", type: "command", detail: "Run a recurring task" },
-];
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -49,6 +39,15 @@ function buildFileItems(files: string[]): MentionItem[] {
       detail: dir,
     };
   });
+}
+
+function buildCommandItems(commands: DiscoveredCommand[]): MentionItem[] {
+  return commands.map((cmd) => ({
+    label: cmd.name,
+    value: cmd.name,
+    type: "command" as const,
+    detail: cmd.description,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +80,14 @@ function ChatViewInner() {
     { staleTime: 60_000, refetchOnWindowFocus: false },
   );
 
+  // Discover available slash commands (skills + builtins)
+  const { data: commands = [] } = trpc.session.listCommands.useQuery(
+    { id: session.id },
+    { staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+
   const fileItems = useMemo(() => buildFileItems(files), [files]);
+  const commandItems = useMemo(() => buildCommandItems(commands), [commands]);
 
   const handleSubmit = (text: string) => {
     if (!text.trim()) return;
@@ -122,7 +128,7 @@ function ChatViewInner() {
             <PromptEditor
               onSubmit={handleSubmit}
               fileItems={fileItems}
-              commandItems={COMMAND_ITEMS}
+              commandItems={commandItems}
               disabled={isGenerating}
               placeholder="Ask nightshift..."
             />

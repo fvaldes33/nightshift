@@ -7,8 +7,16 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
-import { Prec } from "@codemirror/state";
-import { EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
+import { type Extension, Prec, type Range, RangeSetBuilder } from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  keymap,
+  placeholder as cmPlaceholder,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
@@ -138,7 +146,7 @@ function createFileCompletionSource(itemsRef: { current: MentionItem[] }) {
         type: getFileIconType(item.value),
         apply: (view, completion, _from, to) => {
           view.dispatch({
-            changes: { from: word.from, to, insert: `@\`${completion.label}\`` },
+            changes: { from: word.from, to, insert: `\`@${completion.label}\`` },
           });
         },
         boost: boostScore(item.value, query),
@@ -152,15 +160,13 @@ function createFileCompletionSource(itemsRef: { current: MentionItem[] }) {
 
 function createCommandCompletionSource(itemsRef: { current: MentionItem[] }) {
   return (context: CompletionContext): CompletionResult | null => {
-    const word = context.matchBefore(/\/[\w-]*/);
+    const word = context.matchBefore(/(?:^|\s)\/[\w-]*/);
     if (!word) return null;
 
-    // Only at start of line or after whitespace
-    const lineStart = context.state.doc.lineAt(word.from).from;
-    const textBefore = context.state.sliceDoc(lineStart, word.from);
-    if (textBefore.trim().length > 0) return null;
-
-    const query = word.text.slice(1).toLowerCase();
+    // Trim leading whitespace — the regex may capture the space before /
+    const slashIdx = word.text.indexOf("/");
+    const actualFrom = word.from + slashIdx;
+    const query = word.text.slice(slashIdx + 1).toLowerCase();
     const items = itemsRef.current;
 
     const options: Completion[] = items
@@ -172,12 +178,12 @@ function createCommandCompletionSource(itemsRef: { current: MentionItem[] }) {
         type: "keyword",
         apply: (view, _completion, _from, to) => {
           view.dispatch({
-            changes: { from: word.from, to, insert: `/${item.value} ` },
+            changes: { from: actualFrom, to, insert: `/${item.value} ` },
           });
         },
       }));
 
-    return { from: word.from, options, filter: false };
+    return { from: actualFrom, options, filter: false };
   };
 }
 
@@ -357,7 +363,82 @@ const promptTheme = EditorView.theme({
     fontWeight: "600",
     color: "var(--color-foreground, #fff)",
   },
+
+  // ---- Inline mention & command styling ----
+  ".cm-mention": {
+    background: "rgba(59, 130, 246, 0.12)",
+    color: "rgb(96, 165, 250)",
+    borderRadius: "3px",
+    padding: "1px 0",
+  },
+  ".cm-command": {
+    background: "rgba(167, 139, 250, 0.12)",
+    color: "rgb(167, 139, 250)",
+    borderRadius: "3px",
+    padding: "1px 0",
+  },
 });
+
+// ============================================================================
+// Inline decorations for mentions & commands
+// ============================================================================
+
+const mentionMark = Decoration.mark({ class: "cm-mention" });
+const commandMark = Decoration.mark({ class: "cm-command" });
+
+/** Regex to find `@filepath` tokens (backtick-wrapped mention) */
+const MENTION_RE = /`@[^`]+`/g;
+/** Regex to find /command tokens (slash followed by word chars) */
+const COMMAND_RE = /(?:^|\s)(\/[\w-]+)/gm;
+
+function buildDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const doc = view.state.doc;
+
+  // Collect all decoration ranges, then sort by from position
+  const ranges: Range<Decoration>[] = [];
+
+  for (const { from, to } of view.visibleRanges) {
+    const text = doc.sliceString(from, to);
+
+    // Mentions: `@filepath`
+    MENTION_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = MENTION_RE.exec(text))) {
+      ranges.push(mentionMark.range(from + m.index, from + m.index + m[0].length));
+    }
+
+    // Commands: /commit, /review-pr etc.
+    COMMAND_RE.lastIndex = 0;
+    while ((m = COMMAND_RE.exec(text))) {
+      const matchStart = from + m.index + (m[0].length - m[1]!.length); // skip leading whitespace
+      ranges.push(commandMark.range(matchStart, matchStart + m[1]!.length));
+    }
+  }
+
+  // RangeSetBuilder requires sorted ranges
+  ranges.sort((a, b) => a.from - b.from);
+  for (const r of ranges) {
+    builder.add(r.from, r.to, r.value);
+  }
+
+  return builder.finish();
+}
+
+const inlineDecorations: Extension = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = buildDecorations(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildDecorations(update.view);
+      }
+    }
+  },
+  { decorations: (v) => v.decorations },
+);
 
 // ============================================================================
 // Component
@@ -386,6 +467,7 @@ export function PromptEditor({
       markdown(),
       EditorView.lineWrapping,
       promptTheme,
+      inlineDecorations,
       cmPlaceholder(placeholder),
       // Autocomplete
       autocompletion({
