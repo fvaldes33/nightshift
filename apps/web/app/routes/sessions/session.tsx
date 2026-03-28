@@ -131,7 +131,11 @@ export default function Session() {
   const [handoffOpen, setHandoffOpen] = useState(false);
 
   const updateSession = trpc.session.update.useMutation();
-  const pushMutation = trpc.session.push.useMutation();
+  const pushMutation = trpc.session.push.useMutation({
+    onSuccess: () => {
+      utils.session.gitStatus.invalidate({ id: params.sessionId! });
+    },
+  });
   const handoffMutation = trpc.session.handoff.useMutation({
     onSuccess: () => {
       utils.session.get.invalidate({ id: params.sessionId! });
@@ -156,6 +160,8 @@ export default function Session() {
 
   const initialMessages = toUIMessages(session.messages);
   const workspaceReady = session.repo?.workspaceStatus === "ready";
+  const isOnFeatureBranch =
+    gitStatus && gitStatus.branch && gitStatus.branch !== gitStatus.defaultBranch;
 
   function handleDelete() {
     deleteSession.mutate({ id: session!.id });
@@ -210,17 +216,19 @@ export default function Session() {
                     </TooltipContent>
                   </Tooltip>
                 )}
-                <CreatePRDialog
-                  sessionId={session.id}
-                  sessionTitle={session.title}
-                  defaultBranch={gitStatus?.defaultBranch ?? "main"}
-                  trigger={
-                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                      <GitPullRequestIcon className="size-3" />
-                      <span className="hidden sm:inline">Create PR</span>
-                    </Button>
-                  }
-                />
+                {isOnFeatureBranch && (
+                  <CreatePRDialog
+                    sessionId={session.id}
+                    sessionTitle={session.title}
+                    defaultBranch={gitStatus?.defaultBranch ?? "main"}
+                    trigger={
+                      <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+                        <GitPullRequestIcon className="size-3" />
+                        <span className="hidden sm:inline">Create PR</span>
+                      </Button>
+                    }
+                  />
+                )}
               </>
             )}
             {session.workspaceMode === "worktree" && (
@@ -288,8 +296,11 @@ export default function Session() {
                 <BreadcrumbSeparator className="hidden sm:block" />
               </>
             )}
-            <BreadcrumbItem>
+            <BreadcrumbItem className="flex items-center gap-1.5">
               <BreadcrumbPage className="truncate max-w-48">{session.title}</BreadcrumbPage>
+              <Badge variant="secondary" className="text-[10px] capitalize">
+                {session.workspaceMode}
+              </Badge>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>

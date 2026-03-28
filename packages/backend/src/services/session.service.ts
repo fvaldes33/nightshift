@@ -6,7 +6,7 @@ import { z } from "zod";
 import { AppError } from "../lib/errors";
 import { fn } from "../lib/fn";
 import { getGitHubToken } from "./account.service";
-import { gitCurrentBranch } from "./git-cli.service";
+import { gitCheckout, gitCurrentBranch } from "./git-cli.service";
 import { getPullRequest } from "./github.service";
 import {
   cleanupWorktree,
@@ -122,6 +122,14 @@ export async function resolveSessionCwd(
   if (!repoDir) return null;
 
   if (session.workspaceMode === "local") {
+    // If session has a pinned branch, ensure we're on it
+    if (session.branch) {
+      const current = gitCurrentBranch(repoDir);
+      if (current !== session.branch) {
+        gitCheckout(repoDir, session.branch);
+      }
+      return { cwd: repoDir, branch: session.branch };
+    }
     const branch = gitCurrentBranch(repoDir);
     return { cwd: repoDir, branch };
   }

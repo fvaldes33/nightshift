@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { AppError } from "../lib/errors";
-import { protectedProcedure, router } from "../lib/trpc";
 import { claudeImportBulkQueue } from "../jobs/claude-import-bulk.job";
 import { runClaude } from "../lib/claude-runner";
+import { AppError } from "../lib/errors";
+import { protectedProcedure, router } from "../lib/trpc";
+import { getGitHubToken } from "../services/account.service";
 import {
   discoverClaudeSessions,
   discoverClaudeSessionsWithPaths,
 } from "../services/claude-import.service";
-import { getGitHubToken } from "../services/account.service";
 import {
   gitCurrentBranch,
   gitDefaultBranch,
@@ -31,7 +31,9 @@ import {
 export const sessionRouter = router({
   list: protectedProcedure.input(listSessions.schema).query(({ input }) => listSessions(input)),
   get: protectedProcedure.input(getSession.schema).query(({ input }) => getSession(input)),
-  create: protectedProcedure.input(createSession.schema).mutation(({ input }) => createSession(input)),
+  create: protectedProcedure
+    .input(createSession.schema)
+    .mutation(({ input }) => createSession(input)),
   update: protectedProcedure
     .input(updateSession.schema)
     .mutation(({ input }) => updateSession(input)),
@@ -73,36 +75,32 @@ export const sessionRouter = router({
       return { count: result.importable };
     }),
 
-  gitStatus: protectedProcedure
-    .input(z.object({ id: z.uuid() }))
-    .query(async ({ input }) => {
-      const session = await getSession(input);
-      const resolved = await resolveSessionCwd(session);
-      if (!resolved) return { branch: null, unpushedCount: 0, defaultBranch: "main" };
+  gitStatus: protectedProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const session = await getSession(input);
+    const resolved = await resolveSessionCwd(session);
+    if (!resolved) return { branch: null, unpushedCount: 0, defaultBranch: "main" };
 
-      const { cwd, branch } = resolved;
-      let unpushedCount = 0;
-      try {
-        unpushedCount = gitUnpushedCount(cwd);
-      } catch {
-        // No upstream set (new branch) — count commits vs default branch
-        // This is fine, means no commits have been pushed yet
-      }
-      const defaultBranch = gitDefaultBranch(cwd);
-      return { branch, unpushedCount, defaultBranch };
-    }),
+    const { cwd, branch } = resolved;
+    let unpushedCount = 0;
+    try {
+      unpushedCount = gitUnpushedCount(cwd);
+    } catch {
+      // No upstream set (new branch) — count commits vs default branch
+      // This is fine, means no commits have been pushed yet
+    }
+    const defaultBranch = gitDefaultBranch(cwd);
+    return { branch, unpushedCount, defaultBranch };
+  }),
 
-  push: protectedProcedure
-    .input(z.object({ id: z.uuid() }))
-    .mutation(async ({ input }) => {
-      const session = await getSession(input);
-      const resolved = await resolveSessionCwd(session);
-      if (!resolved) throw new Error("No working directory for this session");
+  push: protectedProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ input }) => {
+    const session = await getSession(input);
+    const resolved = await resolveSessionCwd(session);
+    if (!resolved) throw new Error("No working directory for this session");
 
-      gitPush(resolved.cwd);
-      const branch = gitCurrentBranch(resolved.cwd);
-      return { pushed: true, branch };
-    }),
+    gitPush(resolved.cwd);
+    const branch = gitCurrentBranch(resolved.cwd);
+    return { pushed: true, branch };
+  }),
 
   createPR: protectedProcedure
     .input(
@@ -212,8 +210,8 @@ BODY:
       const result = await runClaude({
         prompt,
         cwd,
-        args: ["--max-turns", "1"],
-        timeoutSec: 30,
+        args: ["--max-turns", "5"],
+        timeoutSec: 60,
       });
 
       const text = result.summary || "";

@@ -114,12 +114,10 @@ export default function NewSession() {
   const workspaceMode = form.watch("workspaceMode");
 
   useEffect(() => {
-    if (workspaceMode === "local") {
-      form.setValue("branch", "");
-      setBranchTouched(false);
-    } else if (!branchTouched && title) {
+    if (branchTouched) return;
+    if (workspaceMode === "worktree" && title) {
       form.setValue("branch", `nightshift/${slugify(title)}`);
-    } else if (!branchTouched && !title) {
+    } else {
       form.setValue("branch", "");
     }
   }, [title, branchTouched, form, workspaceMode]);
@@ -133,7 +131,7 @@ export default function NewSession() {
         mode: "chat",
         workspaceMode: values.workspaceMode,
         model: values.model,
-        branch: values.workspaceMode === "worktree" ? (values.branch || null) : null,
+        branch: values.branch || null,
       });
 
       navigate(`/repos/${repoId}/sessions/${session.id}`);
@@ -211,30 +209,36 @@ export default function NewSession() {
             )}
           />
 
-          {workspaceMode === "worktree" && (
-            <FormField
-              control={form.control}
-              name="branch"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Branch</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="nightshift/fix-auth-redirect"
-                      className="font-mono text-sm"
-                      {...field}
-                      onChange={(e) => {
-                        setBranchTouched(true);
-                        field.onChange(e);
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>Auto-generated from title. Edit to override.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <FormField
+            control={form.control}
+            name="branch"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Branch</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={
+                      workspaceMode === "worktree"
+                        ? "nightshift/fix-auth-redirect"
+                        : "Leave empty for current branch"
+                    }
+                    className="font-mono text-sm"
+                    {...field}
+                    onChange={(e) => {
+                      setBranchTouched(true);
+                      field.onChange(e);
+                    }}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {workspaceMode === "worktree"
+                    ? "Auto-generated from title. Edit to override."
+                    : "Optional. Specify a branch to checkout, or leave empty for the current branch."}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           <FormField
             control={form.control}

@@ -161,15 +161,20 @@ export function handoffWorktree(
   }
 
   gitCheckout(repoDir, branch);
-  gitWorktreeRemove({ repoDir, worktreePath });
+
+  try {
+    gitWorktreeRemove({ repoDir, worktreePath });
+  } catch {
+    // Worktree already removed — nothing to clean up
+  }
 }
 
 /**
  * Encode a cwd path the same way Claude Code encodes project directory names.
- * Replaces `/` and `.` with `-`.
+ * Only replaces `/` with `-`.
  */
 function encodeClaudeProjectPath(cwd: string): string {
-  return cwd.replace(/[/.]/g, "-");
+  return cwd.replaceAll("/", "-");
 }
 
 /**
