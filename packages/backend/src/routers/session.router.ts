@@ -22,6 +22,7 @@ import {
   createSession,
   deleteSession,
   getSession,
+  handoffSession,
   listSessions,
   resolveSessionCwd,
   updateSession,
@@ -37,6 +38,10 @@ export const sessionRouter = router({
   delete: protectedProcedure
     .input(deleteSession.schema)
     .mutation(({ input }) => deleteSession(input)),
+
+  handoff: protectedProcedure
+    .input(z.object({ id: z.uuid() }))
+    .mutation(async ({ input }) => handoffSession(input.id)),
 
   discoverClaudeSessions: protectedProcedure
     .input(z.object({ repoId: z.uuid() }))
