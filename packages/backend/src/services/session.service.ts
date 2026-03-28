@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { db } from "@openralph/db/config/database";
 import { eq } from "@openralph/db/drizzle";
 import { insertSessionSchema, sessions, updateSessionSchema } from "@openralph/db/models/index";
@@ -7,7 +8,13 @@ import { fn } from "../lib/fn";
 import { getGitHubToken } from "./account.service";
 import { gitCurrentBranch } from "./git-cli.service";
 import { getPullRequest } from "./github.service";
-import { cleanupWorktree, createWorktree, ensureClone } from "./workspace.service";
+import {
+  cleanupWorktree,
+  createWorktree,
+  ensureClone,
+  handoffWorktree,
+  migrateClaudeSession,
+} from "./workspace.service";
 
 export const listSessions = fn(z.object({ repoId: z.uuid().optional() }), async ({ repoId }) => {
   return db.query.sessions.findMany({
@@ -120,7 +127,18 @@ export async function resolveSessionCwd(
   }
 
   if (session.worktreePath) {
-    return { cwd: session.worktreePath, branch: session.branch ?? "main" };
+    if (existsSync(session.worktreePath)) {
+      return { cwd: session.worktreePath, branch: session.branch ?? "main" };
+    }
+
+    // Worktree path is stale — clear it and fall through to lazy recreation
+    console.warn(
+      `[resolveSessionCwd] Worktree path missing for session ${session.id}: ${session.worktreePath}`,
+    );
+    await db
+      .update(sessions)
+      .set({ worktreePath: null })
+      .where(eq(sessions.id, session.id));
   }
 
   if (!session.branch) {
@@ -139,6 +157,59 @@ export async function resolveSessionCwd(
     .where(eq(sessions.id, session.id));
 
   return { cwd: worktreePath, branch: session.branch };
+}
+
+// ---------------------------------------------------------------------------
+// Handoff: transition a worktree session back to the main repo checkout
+// ---------------------------------------------------------------------------
+
+export async function handoffSession(sessionId: string) {
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+    with: { repo: true },
+  });
+  if (!session) throw new AppError("Session not found", "NOT_FOUND");
+
+  if (session.workspaceMode !== "worktree") {
+    throw new AppError("Session is not in worktree mode", "BAD_REQUEST");
+  }
+  if (!session.worktreePath) {
+    throw new AppError("Session has no worktree path", "BAD_REQUEST");
+  }
+
+  const repoDir = resolveRepoDir(session as SessionWithRepo);
+  if (!repoDir) {
+    throw new AppError("Cannot resolve repo directory", "INTERNAL_ERROR");
+  }
+
+  const branch = session.branch ?? "main";
+
+  // Checkout branch in main repo and remove worktree
+  handoffWorktree(repoDir, session.worktreePath, branch);
+
+  // Migrate Claude session data to the new cwd
+  let keepClaudeSession = true;
+  if (session.claudeSessionId) {
+    keepClaudeSession = migrateClaudeSession(
+      session.worktreePath,
+      repoDir,
+      session.claudeSessionId,
+    );
+  }
+
+  // Update session DB state
+  const [updated] = await db
+    .update(sessions)
+    .set({
+      worktreePath: null,
+      workspaceMode: "local",
+      ...(keepClaudeSession ? {} : { claudeSessionId: null }),
+    })
+    .where(eq(sessions.id, sessionId))
+    .returning();
+
+  if (!updated) throw new AppError("Failed to update session", "INTERNAL_ERROR");
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
