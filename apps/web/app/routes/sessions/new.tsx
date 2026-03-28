@@ -50,6 +50,7 @@ function slugify(text: string): string {
 const newSessionSchema = insertSessionSchema
   .pick({ title: true, model: true })
   .extend({
+    title: z.string().min(1, "Title is required"),
     workspaceMode: z.enum(["local", "worktree"]),
     branch: z.string().optional(),
   });
