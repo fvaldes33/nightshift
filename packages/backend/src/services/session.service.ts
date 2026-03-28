@@ -153,6 +153,12 @@ export async function resolveSessionCwd(
     throw new AppError("Worktree session requires a branch", "BAD_REQUEST");
   }
 
+  // If the branch is already checked out at the main repo, use it directly
+  const currentBranch = gitCurrentBranch(repoDir);
+  if (currentBranch === session.branch) {
+    return { cwd: repoDir, branch: session.branch };
+  }
+
   const worktreePath = createWorktree({
     repoDir,
     id: session.id,

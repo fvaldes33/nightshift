@@ -26,22 +26,24 @@ export const RALPH_ALLOWED_TOOLS = [...CORE_TOOLS, "mcp__openralph__*"].join(","
 // Disallowed tools
 // ---------------------------------------------------------------------------
 
-/** Block git push/PR and worktree/checkout commands via Bash — force use of MCP tools */
+/** Block destructive git/gh commands via Bash — force use of MCP tools */
 export const CHAT_DISALLOWED_TOOLS = [
   "Bash(git push*)",
   "Bash(git remote*)",
-  "Bash(gh pr *)",
-  "Bash(gh api *)",
+  "Bash(gh pr create*)",
+  "Bash(gh pr merge*)",
+  "Bash(gh pr close*)",
   "Bash(git worktree *)",
   "Bash(git checkout *)",
 ].join(",");
 
-/** Block worktree, checkout, push, and PR commands from ralph loop iterations */
+/** Block destructive git/gh commands from ralph loop iterations */
 export const RALPH_DISALLOWED_TOOLS = [
   "Bash(git push*)",
   "Bash(git remote*)",
-  "Bash(gh pr *)",
-  "Bash(gh api *)",
+  "Bash(gh pr create*)",
+  "Bash(gh pr merge*)",
+  "Bash(gh pr close*)",
   "Bash(git worktree *)",
   "Bash(git checkout *)",
 ].join(",");

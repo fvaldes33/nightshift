@@ -10,7 +10,7 @@ import { gitCurrentBranch, gitPush } from "../services/git-cli.service";
 import { createPullRequest, listPullRequests } from "../services/github.service";
 import { getLoop, listLoops, updateLoop } from "../services/loop.service";
 import { createMessage } from "../services/message.service";
-import { getSession, handoffSession, updateSession } from "../services/session.service";
+import { getSession, handoffSession, resolveSessionCwd, updateSession } from "../services/session.service";
 import {
   addTaskComment,
   createTask,
@@ -275,8 +275,9 @@ server.registerTool(
     const session = await getSession({ id: sessionId });
     if (!session.repo) throw new Error("Session has no associated repo");
 
-    const cwd = session.worktreePath ?? session.repo.localPath;
-    if (!cwd) throw new Error("No working directory for this session");
+    const resolved = await resolveSessionCwd(session);
+    if (!resolved) throw new Error("No working directory for this session");
+    const { cwd } = resolved;
 
     gitPush(cwd);
     const branch = gitCurrentBranch(cwd);
@@ -302,8 +303,9 @@ server.registerTool(
     const session = await getSession({ id: sessionId });
     if (!session.repo) throw new Error("Session has no associated repo");
 
-    const cwd = session.worktreePath ?? session.repo.localPath;
-    if (!cwd) throw new Error("No working directory for this session");
+    const resolved = await resolveSessionCwd(session);
+    if (!resolved) throw new Error("No working directory for this session");
+    const { cwd } = resolved;
 
     const token = await getGitHubTokenFromDB();
     const branch = gitCurrentBranch(cwd);

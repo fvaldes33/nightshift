@@ -144,6 +144,15 @@ export function gitIsDirty(cwd: string): boolean {
   return status.length > 0;
 }
 
+/** Stage all changes, commit, and push. Returns true if a commit was made. */
+export function gitCommitAndPush(cwd: string, message: string): boolean {
+  if (!gitIsDirty(cwd)) return false;
+  runSilent("git add -A", cwd);
+  runSilent(`git commit -m "${message.replace(/"/g, '\\"')}"`, cwd);
+  gitPush(cwd);
+  return true;
+}
+
 /** Checkout a branch. */
 export function gitCheckout(cwd: string, branch: string): void {
   runSilent(`git checkout ${branch}`, cwd);
