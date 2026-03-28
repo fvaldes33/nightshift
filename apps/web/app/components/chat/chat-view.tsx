@@ -6,22 +6,54 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@openralph/ui/ai/conversation";
-import {
-  PromptInput,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-} from "@openralph/ui/ai/prompt-input";
+import { type MentionItem, PromptEditor } from "@openralph/ui/components/prompt-editor";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@openralph/ui/components/resizable";
-import { MessageSquareIcon } from "lucide-react";
+import { Spinner } from "@openralph/ui/components/spinner";
+import { cn } from "@openralph/ui/lib/utils";
+import { CornerDownLeftIcon, MessageSquareIcon, SquareIcon } from "lucide-react";
+import { useMemo } from "react";
+import { trpc } from "~/lib/trpc-react";
 import { usePlanStore } from "~/hooks/use-plan-store";
 import { ChatProvider, type SessionContext, useChatContext } from "./chat-context";
 import { ChatMessage } from "./chat-message";
 import { PlanPanel } from "./plan-panel";
+
+// ---------------------------------------------------------------------------
+// Slash commands available in the prompt
+// ---------------------------------------------------------------------------
+
+const COMMAND_ITEMS: MentionItem[] = [
+  { label: "commit", value: "commit", type: "command", detail: "Create a git commit" },
+  { label: "review-pr", value: "review-pr", type: "command", detail: "Review a pull request" },
+  { label: "simplify", value: "simplify", type: "command", detail: "Review code for quality" },
+  { label: "loop", value: "loop", type: "command", detail: "Run a recurring task" },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildFileItems(files: string[]): MentionItem[] {
+  return files.map((filePath) => {
+    const parts = filePath.split("/");
+    const filename = parts.pop() ?? filePath;
+    const dir = parts.length > 0 ? parts.join("/") : undefined;
+    return {
+      label: filename,
+      value: filePath,
+      type: "file" as const,
+      detail: dir,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
 
 interface ChatViewProps {
   session: SessionContext;
@@ -38,10 +70,23 @@ export function ChatView({ session, initialMessages }: ChatViewProps) {
 
 function ChatViewInner() {
   const plan = usePlanStore((s) => s.plan);
-  const { chat } = useChatContext();
+  const { chat, session } = useChatContext();
   const { messages, sendMessage, status, stop } = useChat({ chat });
 
   const isGenerating = status === "submitted" || status === "streaming";
+
+  // Pre-fetch file list for @ mentions
+  const { data: files = [] } = trpc.session.listFiles.useQuery(
+    { id: session.id },
+    { staleTime: 60_000, refetchOnWindowFocus: false },
+  );
+
+  const fileItems = useMemo(() => buildFileItems(files), [files]);
+
+  const handleSubmit = (text: string) => {
+    if (!text.trim()) return;
+    sendMessage({ text });
+  };
 
   const chatPanel = (
     <div className="relative flex size-full flex-col overflow-hidden">
@@ -68,18 +113,43 @@ function ChatViewInner() {
 
       <div className="border-border/50 shrink-0 border-t py-4">
         <div className="mx-auto w-full max-w-3xl px-4">
-          <PromptInput
-            onSubmit={({ text }) => {
-              if (!text.trim()) return;
-              sendMessage({ text });
-            }}
+          <div
+            className={cn(
+              "border-input dark:bg-input/30 shadow-xs relative flex w-full flex-col rounded-lg border transition-[color,box-shadow]",
+              "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]",
+            )}
           >
-            <PromptInputTextarea placeholder="Ask nightshift..." />
-            <PromptInputFooter>
-              <div />
-              <PromptInputSubmit status={status} onStop={stop} />
-            </PromptInputFooter>
-          </PromptInput>
+            <PromptEditor
+              onSubmit={handleSubmit}
+              fileItems={fileItems}
+              commandItems={COMMAND_ITEMS}
+              disabled={isGenerating}
+              placeholder="Ask nightshift..."
+            />
+            <div className="flex items-center justify-end gap-2 px-2 pb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isGenerating && stop) {
+                    stop();
+                  }
+                }}
+                className={cn(
+                  "bg-primary text-primary-foreground hover:bg-primary/90 inline-flex size-8 items-center justify-center rounded-md transition-colors",
+                  !isGenerating && "pointer-events-none opacity-50",
+                )}
+                aria-label={isGenerating ? "Stop" : "Submit"}
+              >
+                {status === "submitted" ? (
+                  <Spinner />
+                ) : status === "streaming" ? (
+                  <SquareIcon className="size-4" />
+                ) : (
+                  <CornerDownLeftIcon className="size-4" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

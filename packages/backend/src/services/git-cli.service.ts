@@ -163,3 +163,16 @@ export function gitCommitAndPush(cwd: string, message: string): boolean {
 export function gitCheckout(cwd: string, branch: string): void {
   runSilent(`git checkout ${branch}`, cwd);
 }
+
+/** List all files in the repo (tracked + untracked, respecting .gitignore). */
+export function gitListFiles(cwd: string): string[] {
+  const tracked = run("git ls-files", cwd);
+  let untracked = "";
+  try {
+    untracked = run("git ls-files --others --exclude-standard", cwd);
+  } catch {
+    // best-effort
+  }
+  const combined = [tracked, untracked].filter(Boolean).join("\n");
+  return combined ? combined.split("\n").filter(Boolean) : [];
+}

@@ -13,6 +13,7 @@ import {
   gitCurrentBranch,
   gitDefaultBranch,
   gitDiffStat,
+  gitListFiles,
   gitLogOneline,
   gitPush,
   gitUnpushedCount,
@@ -75,6 +76,13 @@ export const sessionRouter = router({
 
       return { count: result.importable };
     }),
+
+  listFiles: protectedProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
+    const session = await getSession(input);
+    const resolved = await resolveSessionCwd(session);
+    if (!resolved) return [];
+    return gitListFiles(resolved.cwd);
+  }),
 
   gitStatus: protectedProcedure.input(z.object({ id: z.uuid() })).query(async ({ input }) => {
     const session = await getSession(input);
