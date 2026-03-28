@@ -7,8 +7,10 @@ import {
   createAdapterState,
   writeClaudeEventToStream,
 } from "../lib/claude-stream-adapter";
+import { CHAT_ALLOWED_TOOLS, CHAT_DISALLOWED_TOOLS } from "../lib/claude-tools";
 import { ensureMcpConfig } from "../lib/mcp-config";
 import { createMessage } from "./message.service";
+import { assembleChatDocs } from "./prompt.service";
 import { resolveSessionCwd, updateSession, type getSession } from "./session.service";
 
 interface StreamChatOptions {
@@ -16,28 +18,51 @@ interface StreamChatOptions {
   message: UIMessage;
 }
 
-const SYSTEM_PROMPT = `You are nightshift, an AI coding assistant.`;
-
-function buildSystemPrompt(session: StreamChatOptions["session"], branch: string) {
+async function buildSystemPrompt(session: StreamChatOptions["session"], branch: string) {
   const repo = session.repo;
-  return `${SYSTEM_PROMPT}
-Repo: ${repo ? `${repo.owner}/${repo.name}` : "none"} | Branch: ${branch}
+  const repoLabel = repo ? `${repo.owner}/${repo.name}` : "none";
 
-Be conversational. When the user asks you to evaluate, explore, or plan something:
-1. Investigate the codebase, then present a clear summary.
-2. Write your plan to a plan file — the nightshift UI will display it in a side panel.
-3. Discuss findings with the user before taking action.
+  const docsContent = await assembleChatDocs(repo?.id ?? null);
 
-Never batch-create tasks or make sweeping changes without checking in first. Work collaboratively — the user wants to be part of the decision-making, not just handed a finished result.
+  let prompt = `You are the AI assistant inside nightshift — a self-hosted platform for running autonomous coding agents against GitHub repos. You're in an interactive chat session where the user explores code, plans work, and manages tasks before (optionally) handing execution off to autonomous ralph loops.
 
-You have tools to explore the repo, create and manage tasks, and work with code. Use them thoughtfully.
+## Context
 
-IMPORTANT: For git push and pull request operations, ALWAYS use the nightshift MCP tools instead of running git/gh commands directly:
-- Use mcp__openralph__push_changes (with sessionId: "${session.id}") instead of \`git push\`
-- Use mcp__openralph__create_pull_request (with sessionId: "${session.id}") instead of \`gh pr create\`
-These tools update the nightshift UI with PR status. Direct git/gh commands bypass nightshift tracking.
+- **Session:** ${session.id}
+- **Repo:** ${repoLabel}
+- **Branch:** ${branch}
 
-When the user wants to start a coding loop, use the confirm_loop_details tool to present the config. The user will review and confirm in the nightshift UI before the loop starts.`;
+## How to collaborate
+
+This is a conversation, not a batch job. The user wants to think alongside you.
+
+- **Explore first.** When asked about code, architecture, or feasibility — read the files, then present a clear summary. Don't guess.
+- **Plan visibly.** Write plans to a plan file so the nightshift UI displays them in a side panel. Discuss before executing.
+- **Stay scoped.** Make the changes the user asks for. Don't batch-create tasks, refactor surrounding code, or make sweeping changes without checking in first.
+- **Be direct.** Lead with the answer or recommendation. Skip preamble.
+
+## Available nightshift tools
+
+You have MCP tools (prefixed \`mcp__openralph__\`) for interacting with nightshift:
+
+**Tasks** — Create, list, update, and comment on tasks. Use these to break work into trackable units before kicking off loops.
+**Docs** — Read context docs attached to the repo or globally. Check these for architecture decisions, conventions, or prior context.
+**Sessions & Loops** — Get session state, list loops, and present loop configurations for user review.
+**Git & PRs** — Push branches and create pull requests through nightshift so the UI tracks PR status.
+
+### Tool rules
+
+- For git push and PR operations, ALWAYS use nightshift MCP tools instead of running git/gh commands directly:
+  - \`mcp__openralph__push_changes\` (sessionId: "${session.id}") instead of \`git push\`
+  - \`mcp__openralph__create_pull_request\` (sessionId: "${session.id}") instead of \`gh pr create\`
+- When the user wants to start a coding loop, use \`mcp__openralph__confirm_loop_details\` to present the config. The user will review and confirm in the nightshift UI before the loop starts.
+- Check for context docs (\`mcp__openralph__list_docs\`) when starting work on an unfamiliar part of the codebase.`;
+
+  if (docsContent) {
+    prompt += `\n\n## Context Docs\n\n${docsContent}`;
+  }
+
+  return prompt;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,38 +87,13 @@ async function persistUserMessage(session: StreamChatOptions["session"], message
 // Chat streaming via Claude CLI
 // ---------------------------------------------------------------------------
 
-const CHAT_ALLOWED_TOOLS = [
-  "Read",
-  "Edit",
-  "Write",
-  "Bash",
-  "Glob",
-  "Grep",
-  "Skill",
-  "mcp__openralph__list_tasks",
-  "mcp__openralph__get_task",
-  "mcp__openralph__create_task",
-  "mcp__openralph__update_task",
-  "mcp__openralph__add_task_comment",
-  "mcp__openralph__get_session",
-  "mcp__openralph__list_loops",
-  "mcp__openralph__get_loop",
-  "mcp__openralph__push_changes",
-  "mcp__openralph__create_pull_request",
-  "mcp__openralph__confirm_loop_details",
-].join(",");
-
-// Block git push/PR commands via Bash — force Claude to use MCP tools instead
-const CHAT_DISALLOWED_TOOLS = [
-  "Bash(git push*)",
-  "Bash(git remote*)",
-  "Bash(gh pr *)",
-  "Bash(gh api *)",
-].join(",");
-
 export function streamChat({ session, message }: StreamChatOptions) {
   return createUIMessageStream({
     execute: async ({ writer }) => {
+      if (message.role === "assistant") {
+        return;
+      }
+
       // Persist user message
       await persistUserMessage(session, message);
 
@@ -110,7 +110,7 @@ export function streamChat({ session, message }: StreamChatOptions) {
 
       // Build CLI args
       const mcpConfig = await ensureMcpConfig();
-      const systemPrompt = buildSystemPrompt(session, branch);
+      const systemPrompt = await buildSystemPrompt(session, branch);
 
       const args: string[] = [
         "--mcp-config",

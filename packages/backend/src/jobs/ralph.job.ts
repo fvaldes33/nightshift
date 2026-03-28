@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { runClaude } from "../lib/claude-runner";
+import { RALPH_ALLOWED_TOOLS, RALPH_DISALLOWED_TOOLS } from "../lib/claude-tools";
 import { ensureMcpConfig } from "../lib/mcp-config";
 import { createQueue } from "../lib/queue-builder";
 import { getLoop, insertLoopEvent, updateLoop } from "../services/loop.service";
@@ -81,32 +82,22 @@ ralphIterationQueue.work(async (job) => {
     console.log(`[ralph] Prompt length: ${prompt.length} chars`);
     console.log(`[ralph] cwd: ${cwd}`);
 
-    const allowedTools = [
-      "Read",
-      "Edit",
-      "Write",
-      "Bash",
-      "Glob",
-      "Grep",
-      "Skill",
-      "mcp__openralph__list_tasks",
-      "mcp__openralph__get_task",
-      "mcp__openralph__update_task",
-      "mcp__openralph__add_task_comment",
-      "mcp__openralph__create_message",
-      "mcp__openralph__get_loop",
-      "mcp__openralph__update_loop",
-      "mcp__openralph__list_docs",
-      "mcp__openralph__get_doc",
-    ].join(",");
+    const allowedTools = RALPH_ALLOWED_TOOLS;
 
     let seq = 0;
 
     const result = await runClaude({
       prompt,
       cwd,
-      timeoutSec: 900, // 15 min per iteration
-      args: ["--mcp-config", mcpConfig, "--allowedTools", allowedTools],
+      timeoutSec: Number(process.env.RALPH_ITERATION_TIMEOUT_SEC) || 900,
+      args: [
+        "--mcp-config",
+        mcpConfig,
+        "--allowedTools",
+        allowedTools,
+        "--disallowedTools",
+        RALPH_DISALLOWED_TOOLS,
+      ],
       onEvent: (event) => {
         const currentSeq = seq++;
         // Fire-and-forget: don't block the stream on DB writes

@@ -198,8 +198,11 @@ server.registerTool(
 server.registerTool(
   "list_docs",
   {
-    description: "List context docs, optionally filtered by repo (null for global docs)",
-    inputSchema: { repoId: z.uuid().nullable().optional() },
+    description: "List context docs, optionally filtered by repo and target (all, ralph, chat)",
+    inputSchema: {
+      repoId: z.uuid().nullable().optional(),
+      target: z.enum(["all", "ralph", "chat"]).optional(),
+    },
   },
   async (args) => {
     const result = await listDocs(args);

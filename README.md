@@ -20,7 +20,7 @@ Nightshift is a single Express process: web UI, tRPC API, and pgBoss queue worke
 │  Express + React Router 7 (SSR)     │
 │  ├─ pgBoss worker (queue consumer)  │
 │  ├─ ralph executor (claude -p CLI)  │
-│  ├─ model router (claude / groq)    │
+│  ├─ model router (claude)            │
 │  ├─ GitHub ops (gh CLI / API)       │
 │  ├─ BetterAuth                      │
 │  └─ tRPC API                        │
@@ -44,13 +44,13 @@ Expose it to the internet via [Tailscale](https://tailscale.com) if you want to 
 - **Database:** PostgreSQL (local Supabase) + Drizzle ORM
 - **Queue:** pgBoss
 - **Realtime:** Supabase Realtime + TanStack DB
-- **AI:** Claude Code CLI (Max subscription), Vercel AI SDK, Groq
+- **AI:** Claude Code CLI (Max subscription), Vercel AI SDK
 
 ## Monorepo structure
 
 ```
 apps/web/           → React Router 7 SSR app (Express server)
-packages/ai/        → AI SDK model factories (Anthropic, Groq, OpenAI, Perplexity)
+packages/ai/        → AI SDK model factories (Anthropic, OpenAI, Perplexity)
 packages/backend/   → tRPC routers, services, jobs, tools, MCP server
 packages/db/        → Drizzle ORM schemas and database config
 packages/ui/        → shadcn/ui components + AI chat elements
@@ -103,7 +103,7 @@ Fill in your `.env`:
 | `GITHUB_CLIENT_ID` | From your GitHub OAuth App |
 | `GITHUB_CLIENT_SECRET` | From your GitHub OAuth App |
 
-AI provider keys (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, etc.) are optional — they power the session chat interface. Ralph loops use the Claude CLI with your Max subscription and don't need API keys.
+AI provider keys (`ANTHROPIC_API_KEY`, etc.) are optional — they power the session chat interface. Ralph loops use the Claude CLI with your Max subscription and don't need API keys.
 
 **4. Set up the database**
 
@@ -136,6 +136,55 @@ bun run supabase:start   # Start local Supabase
 bun run supabase:stop    # Stop local Supabase
 bun run supabase:reset   # Reset database (runs migrations + seed)
 ```
+
+## MCP tools
+
+Ralph loops communicate with nightshift through an MCP server (`packages/backend/src/mcp/ralph-server.ts`). These are the tools available to the Claude CLI during a loop:
+
+### Task tools
+
+| Tool | Description |
+|---|---|
+| `list_tasks` | List tasks, optionally filtered by repo, status, assignee, or parent |
+| `get_task` | Get a task by ID with its subtasks, repo, and session |
+| `create_task` | Create a new task for tracking work during planning |
+| `update_task` | Update task fields (status, title, description, assignee, priority, labels) |
+| `add_task_comment` | Add a comment to a task |
+
+### Message tools
+
+| Tool | Description |
+|---|---|
+| `create_message` | Write a message to a session (for iteration updates) |
+
+### Loop tools
+
+| Tool | Description |
+|---|---|
+| `list_loops` | List loops, optionally filtered by session or repo |
+| `get_loop` | Get a loop by ID with its repo, task, and session |
+| `update_loop` | Update loop fields (status, currentIteration, maxIterations) |
+| `confirm_loop_details` | Present loop configuration to the user for review before starting |
+
+### Doc tools
+
+| Tool | Description |
+|---|---|
+| `list_docs` | List context docs, optionally filtered by repo (null for global) |
+| `get_doc` | Get a context doc by ID |
+
+### Session tools
+
+| Tool | Description |
+|---|---|
+| `get_session` | Get a session by ID with its repo, branch, workspace mode, and PR state |
+
+### Git / GitHub tools
+
+| Tool | Description |
+|---|---|
+| `push_changes` | Push the current branch to the remote |
+| `create_pull_request` | Push and create a GitHub PR, updates the session with PR info |
 
 ## Roadmap
 

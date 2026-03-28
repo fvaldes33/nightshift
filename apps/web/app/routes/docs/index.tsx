@@ -137,6 +137,11 @@ export default function DocsIndex() {
                       global
                     </Badge>
                   )}
+                  {doc.target !== "all" && (
+                    <Badge variant="outline" className="shrink-0 text-[10px]">
+                      {doc.target}
+                    </Badge>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"

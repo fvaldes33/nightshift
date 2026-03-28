@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@openralph/ui/components/alert-dialog";
+import { Badge } from "@openralph/ui/components/badge";
 import { Button } from "@openralph/ui/components/button";
 import { FileTextIcon, Loader2, NotebookTextIcon, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -99,6 +100,11 @@ export default function RepoDocs() {
                     Updated {new Date(doc.updatedAt).toLocaleDateString()}
                   </p>
                 </div>
+                {doc.target !== "all" && (
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    {doc.target}
+                  </Badge>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"

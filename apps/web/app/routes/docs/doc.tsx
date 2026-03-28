@@ -9,38 +9,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@openralph/ui/components/select";
+import { useHotkeys } from "@mantine/hooks";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useNavigate, useParams } from "react-router";
-import { ClientOnly } from "~/components/client-only";
 import { trpc } from "~/lib/trpc-react";
 
 export function meta() {
   return [{ title: "Doc — nightshift" }];
 }
 
-// ── Lazy-loaded editor ────────────────────────────────────────────────────────
-
-function LazyMarkdownEditor(props: {
-  value?: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  className?: string;
-}) {
-  const [Editor, setEditor] = useState<React.ComponentType<typeof props> | null>(null);
-
-  useEffect(() => {
-    import("@openralph/ui/components/markdown-editor").then((mod) => {
-      setEditor(() => mod.MarkdownEditor);
-    });
-  }, []);
-
-  if (!Editor) {
-    return <div className="flex-1" />;
-  }
-
-  return <Editor {...props} />;
-}
+const MarkdownEditor = lazy(() =>
+  import("@openralph/ui/components/markdown-editor").then((mod) => ({
+    default: mod.MarkdownEditor,
+  })),
+);
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -55,7 +38,8 @@ export default function DocEditorPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [savedSnapshot, setSavedSnapshot] = useState({ title: "", content: "", repoId: null as string | null });
+  const [target, setTarget] = useState<"all" | "ralph" | "chat">("all");
+  const [savedSnapshot, setSavedSnapshot] = useState({ title: "", content: "", repoId: null as string | null, target: "all" as "all" | "ralph" | "chat" });
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [initialized, setInitialized] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,7 +50,8 @@ export default function DocEditorPage() {
       setTitle(doc.title);
       setContent(doc.content);
       setRepoId(doc.repoId);
-      setSavedSnapshot({ title: doc.title, content: doc.content, repoId: doc.repoId });
+      setTarget(doc.target);
+      setSavedSnapshot({ title: doc.title, content: doc.content, repoId: doc.repoId, target: doc.target });
       setInitialized(true);
     }
   }, [doc, initialized]);
@@ -80,10 +65,12 @@ export default function DocEditorPage() {
         title: updated.title,
         content: updated.content,
         repoId: updated.repoId,
+        target: updated.target,
       });
       setTitle(updated.title);
       setContent(updated.content);
       setRepoId(updated.repoId);
+      setTarget(updated.target);
       setSaveStatus("saved");
       utils.doc.get.invalidate({ id: params.docId! });
       utils.doc.list.invalidate();
@@ -98,16 +85,17 @@ export default function DocEditorPage() {
       initialized &&
       (title !== savedSnapshot.title ||
         content !== savedSnapshot.content ||
-        repoId !== savedSnapshot.repoId),
-    [title, content, repoId, savedSnapshot, initialized],
+        repoId !== savedSnapshot.repoId ||
+        target !== savedSnapshot.target),
+    [title, content, repoId, target, savedSnapshot, initialized],
   );
 
   const blocker = useBlocker(isDirty);
 
   const handleSave = useCallback(() => {
     if (updateDoc.isPending || !isDirty || !doc) return;
-    updateDoc.mutate({ id: doc.id, title, content, repoId });
-  }, [content, doc, isDirty, repoId, title, updateDoc]);
+    updateDoc.mutate({ id: doc.id, title, content, repoId, target });
+  }, [content, doc, isDirty, repoId, target, title, updateDoc]);
 
   const handleBack = useCallback(() => {
     navigate("/docs");
@@ -134,16 +122,7 @@ export default function DocEditorPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isDirty]);
 
-  // Cmd+S
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "s") return;
-      e.preventDefault();
-      handleSave();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handleSave]);
+  useHotkeys([["mod+s", handleSave]]);
 
   // Cleanup timeout
   useEffect(() => {
@@ -188,6 +167,16 @@ export default function DocEditorPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={target} onValueChange={(v) => setTarget(v as typeof target)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All (ralph + chat)</SelectItem>
+              <SelectItem value="ralph">Ralph only</SelectItem>
+              <SelectItem value="chat">Chat only</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
@@ -216,16 +205,14 @@ export default function DocEditorPage() {
 
       {/* Editor */}
       <div className="min-h-0 flex-1">
-        <ClientOnly fallback={<div className="flex-1" />}>
-          {() => (
-            <LazyMarkdownEditor
-              value={content}
-              onChange={setContent}
-              placeholder="Write context for Ralph — repo conventions, global prompts, reference material..."
-              className="h-full"
-            />
-          )}
-        </ClientOnly>
+        <Suspense fallback={<div className="flex-1" />}>
+          <MarkdownEditor
+            value={content}
+            onChange={setContent}
+            placeholder="Write context for Ralph — repo conventions, global prompts, reference material..."
+            className="h-full"
+          />
+        </Suspense>
       </div>
     </div>
   );

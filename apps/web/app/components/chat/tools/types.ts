@@ -7,4 +7,5 @@ export type AnyToolPart = ToolPart | DynamicToolUIPart;
 
 export interface ToolProps {
   part: ToolPart;
+  messageId: string;
 }

@@ -76,7 +76,7 @@ export const ChatMessage = memo(function ChatMessage({ message, status }: ChatMe
             const toolType = (toolPart.type === "dynamic-tool" ? `tool-${toolPart.toolName}` : toolPart.type) as `tool-${string}`;
             const CustomTool = toolRenderMap.get(toolType);
 
-            if (CustomTool) return <CustomTool key={index} part={toolPart as ToolPart} />;
+            if (CustomTool) return <CustomTool key={index} part={toolPart as ToolPart} messageId={message.id} />;
 
             return (
               <Tool key={index}>

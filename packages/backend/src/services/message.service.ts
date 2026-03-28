@@ -35,6 +35,38 @@ export const createMessage = fn(
   },
 );
 
+export const patchToolOutput = fn(
+  z.object({
+    sessionId: z.uuid(),
+    toolCallId: z.string(),
+    output: z.unknown(),
+  }),
+  async ({ sessionId, toolCallId, output }) => {
+    const sessionMessages = await db.query.messages.findMany({
+      where: eq(messages.sessionId, sessionId),
+    });
+
+    const target = sessionMessages.find((m) =>
+      (m.parts as any[])?.some((p: any) => p.toolCallId === toolCallId),
+    );
+
+    if (!target) throw new AppError("Message with tool call not found", "NOT_FOUND");
+
+    const updatedParts = (target.parts as any[]).map((p: any) =>
+      p.toolCallId === toolCallId ? { ...p, state: "output-available", output } : p,
+    );
+
+    const [updated] = await db
+      .update(messages)
+      .set({ parts: updatedParts })
+      .where(eq(messages.id, target.id))
+      .returning();
+
+    if (!updated) throw new AppError("Failed to update message", "INTERNAL_ERROR");
+    return updated;
+  },
+);
+
 export const deleteMessage = fn(z.object({ id: z.uuid() }), async ({ id }) => {
   const [message] = await db.delete(messages).where(eq(messages.id, id)).returning();
   if (!message) throw new AppError("Message not found", "NOT_FOUND");

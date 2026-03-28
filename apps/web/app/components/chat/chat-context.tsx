@@ -1,6 +1,6 @@
 import { Chat } from "@ai-sdk/react";
 import type { NightshiftDataTypes, NightshiftMessage } from "@openralph/backend/tools/index";
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai";
+import { DefaultChatTransport } from "ai";
 import { createContext, useContext, useState } from "react";
 import { usePlanStore } from "~/hooks/use-plan-store";
 
@@ -31,12 +31,9 @@ function createChatInstance(
         return { body: { message: messages[messages.length - 1], id } };
       },
     }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
     onData: (dataPart) => {
       if (dataPart.type === "data-plan") {
-        onPlanData(
-          dataPart.data as Extract<NightshiftDataTypes, { type: "data-plan" }>["data"],
-        );
+        onPlanData(dataPart.data as Extract<NightshiftDataTypes, { type: "data-plan" }>["data"]);
       }
     },
   });

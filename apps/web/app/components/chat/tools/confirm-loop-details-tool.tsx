@@ -18,15 +18,16 @@ interface ParsedOutput extends LoopConfig {
   loop?: { id: string; name: string; status: string };
 }
 
-export function ConfirmLoopDetailsTool({ part }: { part: AnyToolPart }) {
+export function ConfirmLoopDetailsTool({ part, messageId }: { part: AnyToolPart; messageId: string }) {
   const { chat, session } = useChatContext();
-  const { addToolOutput } = useChat({ chat });
+  const { setMessages } = useChat({ chat });
   const startLoop = trpc.loop.start.useMutation();
+  const patchToolOutput = trpc.message.patchToolOutput.useMutation();
 
   const config = (part as any).input as LoopConfig;
   const rawOutput = (part as any).output;
 
-  // Parse output — string (initial MCP echo) or object (after addToolOutput patch)
+  // Parse output — string (initial MCP echo) or object (after setMessages patch)
   const parsed = useMemo<ParsedOutput | null>(() => {
     if (!rawOutput) return null;
     if (typeof rawOutput === "string") {
@@ -41,10 +42,32 @@ export function ConfirmLoopDetailsTool({ part }: { part: AnyToolPart }) {
 
   const action = parsed?.action ?? "pending";
 
+  function patchAndPersist(output: ParsedOutput) {
+    // In-memory: patch the exact message by id
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              parts: msg.parts.map((p: any) =>
+                p.toolCallId === part.toolCallId
+                  ? { ...p, state: "output-available", output }
+                  : p,
+              ),
+            }
+          : msg,
+      ),
+    );
+    // Persist to DB so it survives refresh
+    patchToolOutput.mutate({
+      sessionId: session.id,
+      toolCallId: part.toolCallId,
+      output,
+    });
+  }
+
   function handleConfirm() {
     if (!session.repoId) return;
-
-    const toolCallId = part.toolCallId;
 
     startLoop.mutate(
       {
@@ -56,16 +79,12 @@ export function ConfirmLoopDetailsTool({ part }: { part: AnyToolPart }) {
       },
       {
         onSuccess: (loop) => {
-          addToolOutput({
-            tool: "mcp__openralph__confirm_loop_details" as any,
-            toolCallId,
-            output: {
-              action: "confirmed" as const,
-              name: config.name ?? "Ralph Loop",
-              maxIterations: config.maxIterations ?? 10,
-              filterConfig: config.filterConfig,
-              loop: { id: loop.id, name: loop.name, status: loop.status },
-            },
+          patchAndPersist({
+            action: "confirmed",
+            name: config.name ?? "Ralph Loop",
+            maxIterations: config.maxIterations ?? 10,
+            filterConfig: config.filterConfig,
+            loop: { id: loop.id, name: loop.name, status: loop.status },
           });
         },
       },
@@ -73,15 +92,11 @@ export function ConfirmLoopDetailsTool({ part }: { part: AnyToolPart }) {
   }
 
   function handleReject() {
-    addToolOutput({
-      tool: "confirm_loop_details" as const,
-      toolCallId: part.toolCallId,
-      output: {
-        action: "rejected" as const,
-        name: config.name ?? "Ralph Loop",
-        maxIterations: config.maxIterations ?? 10,
-        filterConfig: config.filterConfig,
-      },
+    patchAndPersist({
+      action: "rejected",
+      name: config.name ?? "Ralph Loop",
+      maxIterations: config.maxIterations ?? 10,
+      filterConfig: config.filterConfig,
     });
   }
 
