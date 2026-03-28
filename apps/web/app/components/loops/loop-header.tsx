@@ -17,15 +17,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@openralph/ui/components/dropdown-menu";
+import { toast } from "@openralph/ui/components/sonner";
 import {
   ArrowLeftIcon,
+  ArrowLeftToLineIcon,
   CopyIcon,
   GitPullRequestIcon,
+  Loader2Icon,
   MoreHorizontalIcon,
   TrashIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { trpc } from "~/lib/trpc-react";
 
 interface LoopHeaderProps {
   loop: LoopGetOutput;
@@ -42,6 +46,17 @@ const prStatusColor: Record<string, string> = {
 export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
   const loopsUrl = `/repos/${repoId}/loops`;
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+
+  const utils = trpc.useUtils();
+  const handoffMutation = trpc.session.handoff.useMutation({
+    onSuccess: () => {
+      utils.loop.get.invalidate({ id: loop.id });
+    },
+    onError: (err) => {
+      toast(err.message);
+    },
+  });
 
   const session = loop.session;
   const prUrl = session?.prUrl;
@@ -76,6 +91,23 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
               PR #{prNumber}
               {prStatus && prStatus !== "open" && <span className="capitalize">{prStatus}</span>}
             </a>
+          </Button>
+        )}
+
+        {session?.workspaceMode === "worktree" && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setHandoffOpen(true)}
+            disabled={handoffMutation.isPending}
+          >
+            {handoffMutation.isPending ? (
+              <Loader2Icon className="size-3 animate-spin" />
+            ) : (
+              <ArrowLeftToLineIcon className="size-3" />
+            )}
+            Handoff
           </Button>
         )}
 
@@ -114,6 +146,26 @@ export function LoopHeader({ loop, repoId, onDelete }: LoopHeaderProps) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={onDelete}>
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={handoffOpen} onOpenChange={setHandoffOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Handoff worktree?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will checkout the branch in the main repo and remove the worktree. The session
+              will continue in local mode.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handoffMutation.mutate({ id: session!.id })}
+            >
+              Handoff
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

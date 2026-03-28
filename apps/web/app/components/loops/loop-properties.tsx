@@ -5,6 +5,7 @@ import { Clipboard } from "@openralph/ui/components/clipboard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@openralph/ui/components/tooltip";
 import { Button } from "@openralph/ui/components/button";
 import {
+  ArrowLeftToLineIcon,
   ArrowRightIcon,
   CalendarIcon,
   CircleDotIcon,
@@ -76,12 +77,22 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
             </a>
           </Clipboard>
         ) : loop.status === "complete" && loop.session ? (
-          <Button variant="outline" size="sm" className="h-6 gap-1 text-[10px]" asChild>
-            <Link to={`/repos/${repoId}/sessions/${loop.session.id}`}>
-              Create PR
-              <ArrowRightIcon className="size-2.5" />
-            </Link>
-          </Button>
+          <span className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" className="h-6 gap-1 text-[10px]" asChild>
+              <Link to={`/repos/${repoId}/sessions/${loop.session.id}`}>
+                Create PR
+                <ArrowRightIcon className="size-2.5" />
+              </Link>
+            </Button>
+            {loop.session.workspaceMode === "worktree" && (
+              <Button variant="outline" size="sm" className="h-6 gap-1 text-[10px]" asChild>
+                <Link to={`/repos/${repoId}/sessions/${loop.session.id}`}>
+                  <ArrowLeftToLineIcon className="size-2.5" />
+                  Handoff
+                </Link>
+              </Button>
+            )}
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>
         )}
@@ -89,9 +100,17 @@ export function LoopProperties({ loop, repoId }: { loop: LoopGetOutput; repoId: 
 
       <TaskPropertyRow icon={<FolderIcon />} label="Worktree">
         {loop.session?.worktreePath ? (
-          <Clipboard value={loop.session.worktreePath} className="font-mono text-xs text-muted-foreground">
-            {loop.session.worktreePath}
-          </Clipboard>
+          <span className="flex items-center gap-1.5">
+            <span className="size-1.5 shrink-0 rounded-full bg-green-500" />
+            <Clipboard value={loop.session.worktreePath} className="font-mono text-xs text-muted-foreground">
+              {loop.session.worktreePath}
+            </Clipboard>
+          </span>
+        ) : loop.session?.workspaceMode === "worktree" ? (
+          <span className="flex items-center gap-1.5">
+            <span className="size-1.5 shrink-0 rounded-full bg-yellow-500" />
+            <span className="text-xs text-muted-foreground">Missing</span>
+          </span>
         ) : (
           <span className="text-xs text-muted-foreground">{"\u2014"}</span>
         )}
