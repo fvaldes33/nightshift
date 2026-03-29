@@ -9,11 +9,11 @@ import {
 import { markdown } from "@codemirror/lang-markdown";
 import { type Extension, Prec, type Range, RangeSetBuilder } from "@codemirror/state";
 import {
+  placeholder as cmPlaceholder,
   Decoration,
   type DecorationSet,
   EditorView,
   keymap,
-  placeholder as cmPlaceholder,
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
@@ -94,7 +94,7 @@ const SPECIAL_FILENAMES: Record<string, string> = {
 function getFileIconType(path: string): string {
   const name = path.split("/").pop()?.toLowerCase() ?? "";
   if (SPECIAL_FILENAMES[name]) return SPECIAL_FILENAMES[name]!;
-  const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
+  const ext = name.includes(".") ? (name.split(".").pop() ?? "") : "";
   return FILE_ICON_MAP[ext] ?? "file-default";
 }
 
@@ -193,7 +193,7 @@ function createCommandCompletionSource(itemsRef: { current: MentionItem[] }) {
 
 const promptTheme = EditorView.theme({
   "&": {
-    fontSize: "14px",
+    fontSize: "16px",
     maxHeight: "200px",
   },
   ".cm-scroller": {

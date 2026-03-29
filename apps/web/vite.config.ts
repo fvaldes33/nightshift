@@ -9,6 +9,8 @@ export default defineConfig({
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   server: {
-    allowedHosts: ["francos-macbook-pro.tail683835.ts.net"],
+    allowedHosts: true,
+    // HMR works on localhost; over Tailscale the WS port isn't proxied
+    // so the browser gracefully falls back to full reloads.
   },
 });

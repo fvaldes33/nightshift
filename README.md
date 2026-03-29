@@ -34,7 +34,7 @@ Nightshift is a single Express process: web UI, tRPC API, and pgBoss queue worke
        └─────────────────┘
 ```
 
-Expose it to the internet via [Tailscale](https://tailscale.com) if you want to access it from anywhere.
+Optionally expose it to your [Tailscale](https://tailscale.com) network to access from any device — see setup instructions below.
 
 ## Tech stack
 
@@ -117,13 +117,40 @@ bun run db:push
 bun run dev
 ```
 
-The app runs at [http://localhost:56677](http://localhost:56677).
+The app runs at [http://localhost:56677](http://localhost:56677) in dev mode (with hot reload).
+
+For production use (recommended for normal usage):
+
+```bash
+bun run build
+bun run start
+```
+
+### Remote access with Tailscale (optional)
+
+If you want to access nightshift from your phone, tablet, or another machine on your tailnet:
+
+```bash
+# Expose nightshift to your tailnet (private, not public)
+tailscale serve --bg 56677
+```
+
+This makes nightshift available at `https://<your-machine>.tail<xxxxx>.ts.net` over HTTPS, accessible only to devices on your Tailscale network.
+
+Update your `.env` to match:
+
+```
+BETTER_AUTH_URL=https://<your-machine>.tail<xxxxx>.ts.net
+```
+
+And update your GitHub OAuth App callback URL to `https://<your-machine>.tail<xxxxx>.ts.net/api/auth/callback/github`.
 
 ## Commands
 
 ```bash
 bun run dev          # Start all apps/packages in dev mode
 bun run build        # Production build
+bun run start        # Start production server
 bun run typecheck    # Type-check all workspaces
 bun run lint         # Lint all workspaces
 bun run format       # Prettier across the repo
