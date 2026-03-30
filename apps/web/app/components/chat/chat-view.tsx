@@ -16,7 +16,7 @@ import {
 import { Spinner } from "@openralph/ui/components/spinner";
 import { cn } from "@openralph/ui/lib/utils";
 import { CornerDownLeftIcon, MessageSquareIcon, SquareIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { trpc } from "~/lib/trpc-react";
 import { usePlanStore } from "~/hooks/use-plan-store";
 import { ChatProvider, type SessionContext, useChatContext } from "./chat-context";
@@ -72,6 +72,7 @@ function ChatViewInner() {
   const { chat, session } = useChatContext();
   const { messages, sendMessage, status, stop } = useChat({ chat });
 
+  const [input, setInput] = useState("");
   const isGenerating = status === "submitted" || status === "streaming";
 
   // Pre-fetch file list for @ mentions
@@ -92,6 +93,7 @@ function ChatViewInner() {
   const handleSubmit = (text: string) => {
     if (!text.trim()) return;
     sendMessage({ text });
+    setInput("");
   };
 
   const chatPanel = (
@@ -126,6 +128,8 @@ function ChatViewInner() {
             )}
           >
             <PromptEditor
+              value={input}
+              onValueChange={setInput}
               onSubmit={handleSubmit}
               fileItems={fileItems}
               commandItems={commandItems}
@@ -136,13 +140,14 @@ function ChatViewInner() {
               <button
                 type="button"
                 onClick={() => {
-                  if (isGenerating && stop) {
-                    stop();
+                  if (isGenerating) {
+                    stop?.();
+                  } else {
+                    handleSubmit(input);
                   }
                 }}
                 className={cn(
                   "bg-primary text-primary-foreground hover:bg-primary/90 inline-flex size-8 items-center justify-center rounded-md transition-colors",
-                  !isGenerating && "pointer-events-none opacity-50",
                 )}
                 aria-label={isGenerating ? "Stop" : "Submit"}
               >

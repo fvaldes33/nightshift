@@ -36,6 +36,8 @@ export interface MentionItem {
 }
 
 export interface PromptEditorProps {
+  value?: string;
+  onValueChange?: (value: string) => void;
   onSubmit: (text: string) => void;
   placeholder?: string;
   /** Items shown when user types @ */
@@ -445,6 +447,8 @@ const inlineDecorations: Extension = ViewPlugin.fromClass(
 // ============================================================================
 
 export function PromptEditor({
+  value,
+  onValueChange,
   onSubmit,
   placeholder = "Ask nightshift...",
   fileItems = [],
@@ -466,6 +470,7 @@ export function PromptEditor({
     return [
       markdown(),
       EditorView.lineWrapping,
+      EditorView.contentAttributes.of({ spellcheck: "true", autocorrect: "on" }),
       promptTheme,
       inlineDecorations,
       cmPlaceholder(placeholder),
@@ -495,9 +500,6 @@ export function PromptEditor({
               const text = view.state.doc.toString();
               if (text.trim()) {
                 onSubmitRef.current(text);
-                view.dispatch({
-                  changes: { from: 0, to: view.state.doc.length, insert: "" },
-                });
               }
               return true;
             },
@@ -512,8 +514,11 @@ export function PromptEditor({
     // Only recreate extensions when placeholder changes — items use refs
   }, [placeholder]);
 
-  const handleChange = useCallback(() => {
-    // No-op: we read from view.state.doc on submit
+  const onValueChangeRef = useRef(onValueChange);
+  onValueChangeRef.current = onValueChange;
+
+  const handleChange = useCallback((val: string) => {
+    onValueChangeRef.current?.(val);
   }, []);
 
   // Focus on mount
@@ -527,7 +532,7 @@ export function PromptEditor({
   return (
     <CodeMirror
       ref={cmRef}
-      value=""
+      value={value ?? ""}
       onChange={handleChange}
       extensions={extensions}
       className={className}
