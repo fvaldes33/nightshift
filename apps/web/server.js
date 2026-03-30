@@ -9,9 +9,7 @@ import morgan from "morgan";
 import * as fs from "node:fs";
 import sourceMapSupport from "source-map-support";
 
-if (process.env.NODE_ENV === "development") {
-  config({ path: "../../.env" });
-}
+config({ path: "../../.env" });
 
 sourceMapSupport.install({
   retrieveSourceMap: (source) => {
@@ -39,13 +37,15 @@ const DEVELOPMENT = process.env.NODE_ENV === "development";
 
 const app = express();
 
-app.use(compression({
-  filter: (req) => {
-    // Skip compression for streaming endpoints
-    if (req.url.startsWith("/api/chat")) return false;
-    return compression.filter(req, req.res);
-  },
-}));
+app.use(
+  compression({
+    filter: (req) => {
+      // Skip compression for streaming endpoints
+      if (req.url.startsWith("/api/chat")) return false;
+      return compression.filter(req, req.res);
+    },
+  }),
+);
 
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 app.use((req, res, next) => {

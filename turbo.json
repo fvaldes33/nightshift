@@ -2,6 +2,19 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
+    "start": {
+      "dependsOn": [
+        "^start"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*"
+      ],
+      "outputs": [
+        "dist/**",
+        "build/**"
+      ]
+    },
     "build": {
       "dependsOn": [
         "^build"
