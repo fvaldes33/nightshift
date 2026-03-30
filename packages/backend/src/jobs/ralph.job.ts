@@ -35,7 +35,7 @@ ralphLoopQueue.work(async (job) => {
 
   // Resolve cwd from the loop's session
   const session = await getSession({ id: loop.sessionId });
-  const resolved = await resolveSessionCwd(session);
+  const resolved = await resolveSessionCwd(session, { forceCheckout: true });
   if (!resolved) throw new Error(`Could not resolve working directory for loop ${loopId}`);
 
   await updateLoop({ id: loopId, status: "running" });

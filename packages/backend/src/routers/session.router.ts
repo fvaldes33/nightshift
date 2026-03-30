@@ -114,7 +114,7 @@ export const sessionRouter = router({
 
   push: protectedProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ input }) => {
     const session = await getSession(input);
-    const resolved = await resolveSessionCwd(session);
+    const resolved = await resolveSessionCwd(session, { forceCheckout: true });
     if (!resolved) throw new Error("No working directory for this session");
 
     gitPush(resolved.cwd);
@@ -136,7 +136,7 @@ export const sessionRouter = router({
       const session = await getSession({ id });
       if (!session.repo) throw new Error("Session has no associated repo");
 
-      const resolved = await resolveSessionCwd(session);
+      const resolved = await resolveSessionCwd(session, { forceCheckout: true });
       if (!resolved) throw new Error("No working directory for this session");
 
       const token = await getGitHubToken({});

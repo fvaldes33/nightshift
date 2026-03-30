@@ -275,7 +275,7 @@ server.registerTool(
     const session = await getSession({ id: sessionId });
     if (!session.repo) throw new Error("Session has no associated repo");
 
-    const resolved = await resolveSessionCwd(session);
+    const resolved = await resolveSessionCwd(session, { forceCheckout: true });
     if (!resolved) throw new Error("No working directory for this session");
     const { cwd } = resolved;
 
@@ -303,7 +303,7 @@ server.registerTool(
     const session = await getSession({ id: sessionId });
     if (!session.repo) throw new Error("Session has no associated repo");
 
-    const resolved = await resolveSessionCwd(session);
+    const resolved = await resolveSessionCwd(session, { forceCheckout: true });
     if (!resolved) throw new Error("No working directory for this session");
     const { cwd } = resolved;
 

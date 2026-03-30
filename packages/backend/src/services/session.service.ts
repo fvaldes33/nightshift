@@ -117,13 +117,13 @@ function resolveRepoDir(session: SessionWithRepo): string | null {
  */
 export async function resolveSessionCwd(
   session: SessionWithRepo,
+  { forceCheckout = false } = {},
 ): Promise<{ cwd: string; branch: string } | null> {
   const repoDir = resolveRepoDir(session);
   if (!repoDir) return null;
 
   if (session.workspaceMode === "local") {
-    // If session has a pinned branch, ensure we're on it
-    if (session.branch) {
+    if (session.branch && forceCheckout) {
       const current = gitCurrentBranch(repoDir);
       if (current !== session.branch) {
         gitCheckout(repoDir, session.branch);

@@ -99,7 +99,7 @@ export function streamChat({ session, message }: StreamChatOptions) {
       await persistUserMessage(session, message);
 
       // Resolve working directory
-      const resolved = await resolveSessionCwd(session);
+      const resolved = await resolveSessionCwd(session, { forceCheckout: true });
       if (!resolved) throw new Error("No working directory available for this session");
       const { cwd: worktreePath, branch } = resolved;
 
